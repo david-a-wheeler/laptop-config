@@ -52,7 +52,7 @@ def main():
     # contacting the secrets server.
     sys.exit(1)
 
-  session_id = os.environ.get("GIT_AUTH_SESSION", "")
+  session_id = os.environ.get("LAPTOP_CONFIG_AUTH_SESSION", "")
 
   try:
     commit_summary = subprocess.check_output(
@@ -66,7 +66,7 @@ def main():
       "protocol": input_data.get("protocol", "https"),
       "host": host,
       "path": input_data.get("path", ""),
-      "commit": commit_summary,
+      "context": commit_summary,
       "secret_name": secret_name,
   }
 

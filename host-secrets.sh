@@ -77,8 +77,10 @@ cmd_get() {
   security find-generic-password -s "${KEYCHAIN_PREFIX}$1" -w
 }
 
-# Per-secret setup instructions. Add a case here as new named secrets show
-# up in config.sh's GIT_SECRETS - this is the intended extension point.
+# Per-secret setup instructions. Add a case here for any secret worth
+# documenting how to (re)create - not just the ones in GIT_SECRETS, since
+# secrets don't need a config.sh declaration to be servable any more (see
+# KEYCHAIN_PREFIX above).
 print_recipe() {
   case "$1" in
     github-pat)
@@ -88,6 +90,18 @@ Create a GitHub Personal Access Token:
   1. Open https://github.com/settings/tokens
   2. Generate new token (classic) - scopes: repo, workflow.
   3. Copy the token (starts with "ghp_" or "github_pat_").
+EOF
+      ;;
+    heroku-api-key)
+      cat <<EOF
+
+Create a Heroku API token (see rotate-heroku-key.sh for a guided version):
+  1. Run "heroku login" (wherever you have the Heroku CLI - browser-based).
+  2. Run "heroku authorizations:create --description \"laptop-config\" --short".
+     (Deliberately not your account's single default API key from the
+     Heroku dashboard - regenerating that would break anything else using
+     it. This makes a separate, independently revocable token instead.)
+  3. Copy the printed token.
 EOF
       ;;
     *)

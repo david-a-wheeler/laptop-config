@@ -188,10 +188,11 @@ def keychain_secret_exists(name: str, vm_hostname: str) -> bool:
 def _applescript_escape(s: str) -> str:
   """Escapes a string for safe embedding in an AppleScript string literal.
 
-  repo_path/commit_info come from the requesting VM (commit_info is derived
-  from a commit message, which is attacker-influenceable if you ever clone
-  something untrusted), so without this a crafted value could break out of
-  the quoted string and run arbitrary AppleScript via osascript.
+  repo_path/context_info/secret_name all come from the requesting VM (for
+  git requests, context_info is derived from a commit message, which is
+  attacker-influenceable if you ever clone something untrusted), so
+  without this a crafted value could break out of the quoted string and
+  run arbitrary AppleScript via osascript.
   """
   return s.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -223,7 +224,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
 
     session_id = payload.get("session", "")
     repo_path = payload.get("path", "Unknown Path")
-    commit_info = payload.get("commit", "No commit details")
+    context_info = payload.get("context", "No context given")
     secret_name = payload.get("secret_name", "")
 
     if not session_id:
@@ -232,7 +233,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
           client=client_ip, secret_name=secret_name,
       )
       self._respond(
-          {"status": "denied", "reason": "Missing GIT_AUTH_SESSION"}, 403
+          {"status": "denied", "reason": "Missing LAPTOP_CONFIG_AUTH_SESSION"}, 403
       )
       return
 
@@ -288,7 +289,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
     if dry_run:
       self._handle_secret_dry_run(
           client_ip, vm_hostname, secret_name, session_id, repo_path,
-          commit_info,
+          context_info,
       )
       return
 
@@ -308,7 +309,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
         f"Secret: {_applescript_escape(secret_name)}\n"
         f"Requesting VM: {_applescript_escape(vm_hostname or 'unknown')}\n"
         f"Target Path: {_applescript_escape(repo_path)}\n"
-        f"Local Context: {_applescript_escape(commit_info)}\n"
+        f"Local Context: {_applescript_escape(context_info)}\n"
         f"Session ID: {_applescript_escape(session_id[:8])}...\n\n"
         f"Authorize access for this operation?"
     )
@@ -338,7 +339,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
       )
 
   def _handle_secret_dry_run(self, client_ip, vm_hostname, secret_name,
-                              session_id, repo_path, commit_info):
+                              session_id, repo_path, context_info):
     """Exercises the full approval flow (Keychain lookup, dialog) without
     ever reading the secret's actual value - see keychain_secret_exists().
     The response has no "token" field either way, so there's nothing in it
@@ -368,7 +369,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
         f"Secret: {_applescript_escape(secret_name)}\n"
         f"Requesting VM: {_applescript_escape(vm_hostname or 'unknown')}\n"
         f"Target Path: {_applescript_escape(repo_path)}\n"
-        f"Local Context: {_applescript_escape(commit_info)}\n"
+        f"Local Context: {_applescript_escape(context_info)}\n"
         f"Session ID: {_applescript_escape(session_id[:8])}...\n\n"
         f"This only tests connectivity and this dialog - nothing is "
         f"released either way."
@@ -397,7 +398,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
     clicked. Shared by the real and dry-run paths so there's exactly one
     place that builds and runs the osascript command. Defaults to
     Authorize (a bare Enter approves) rather than Deny - this dialog only
-    ever fires for a request carrying a live GIT_AUTH_SESSION, which
+    ever fires for a request carrying a live LAPTOP_CONFIG_AUTH_SESSION, which
     noclaude() strips before an AI agent ever gets near it (see
     vm-bash-aliases-block.template.sh), so in practice it's gating routine
     human operations, not an adversarial AI - a dialog you have to read

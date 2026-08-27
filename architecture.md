@@ -35,7 +35,7 @@ Autonomous AI agents (Claude Code, Goose) inside the VMs need file access and co
 ```mermaid
 flowchart LR
     subgraph VM["Ubuntu Guest VM"]
-        Human["Human interactive shell<br/>(GIT_AUTH_SESSION set)"]
+        Human["Human interactive shell<br/>(LAPTOP_CONFIG_AUTH_SESSION set)"]
         Agent["AI agent wrapper<br/>(noclaude - session stripped)"]
     end
 
@@ -56,12 +56,12 @@ flowchart LR
 | Component | Industry / Enterprise Equivalent | Security Function |
 | :---- | :---- | :---- |
 | **Secrets Server** (`secrets_server.py`) | AWS IMDSv2 / GCP Metadata Server | Keeps long-lived credentials off the guest OS completely. |
-| **VM Credential Helper** (`vm-git-helper.template.py`) | Git Credential Manager / AWS Helper | Intercepts native Git auth requests transparently in memory. |
-| **GIT\_AUTH\_SESSION** | OAuth 2.0 / OIDC Session Token | Scopes credential issuance strictly to human shell process trees. |
+| **VM Credential Helper** (`vm-git-helper.template.py`, `secrets-client.py`) | Git Credential Manager / AWS Helper | Intercepts native Git auth requests transparently in memory; `secrets-client.py` is the same idea for any non-git caller. |
+| **LAPTOP\_CONFIG\_AUTH\_SESSION** | OAuth 2.0 / OIDC Session Token | Scopes credential issuance strictly to human shell process trees. |
 | **Wrapper Scrubbing** (`noclaude()`) | Container Environment Scrubbing | Prevents AI agents from inheriting authorization handles. |
 | **macOS Keychain Storage** | Vault / Secret Manager | Stores secrets encrypted at rest on the host system. |
 
-The server serves any secret `host-secrets.sh` has stored (not just a single GitHub PAT) - `vm-git-helper.template.py` is one caller (resolving which secret to ask for from `config.sh`'s `GIT_SECRETS`), but any VM-side script can ask for a secret by name the same way. Heroku auth is one such case: rather than the `heroku` CLI's own OAuth login (which doesn't work well inside a sandboxed, largely-unattended VM), a Heroku API key is stored like any other secret and requested the same way.
+The server serves any secret `host-secrets.sh` has stored (not just a single GitHub PAT) - `vm-git-helper.template.py` is one caller (resolving which secret to ask for from `config.sh`'s `GIT_SECRETS`), but any VM-side script can ask for a secret by name the same way, via `secrets-client.py get <name>` - a thin, generic client speaking the same request/response protocol, without git's credential-helper-specific format. Heroku auth is the first non-git case: rather than the `heroku` CLI's own OAuth login (which would mean a long-lived session token sitting on disk in the VM - exactly what this design avoids), a Heroku API key is stored like any other secret and requested the same way.
 
 **What marks a secret as servable at all** is purely how it's named in Keychain: `host-secrets.sh` stores everything under `config.sh`'s `KEYCHAIN_PREFIX` (`laptop-config-` by default), and the server only ever looks up prefixed names - a request for anything not stored that way is indistinguishable from "doesn't exist." There's no separate list of allowed secret names anywhere to keep in sync; adding a new servable secret is just `host-secrets.sh set <name>` on the host.
 
@@ -73,7 +73,11 @@ A client can never request a locked name directly - any `secret_name` containing
 
 That's the actual scope of the guarantee: **it holds against a compromised or malicious *unprivileged* process inside a VM** (the threat model this whole design defends against - see Section 1), not against an attacker who has already escalated to root inside a guest VM. A root process *can* open raw sockets, and at that point whether a forged packet's replies would actually reach it depends on the isolation properties of UTM's virtual network (Apple's `vmnet.framework` in Shared Network/NAT mode - the mode already established elsewhere in this doc, since mDNS doesn't cross it) - specifically, whether that virtual switch would let one VM ARP-spoof another's address to redirect return traffic. That hasn't been tested here and isn't asserted either way. In practice this isn't a gap worth closing right now: a guest that's already root-compromised is a far larger problem than this one endpoint, and every VM here is already fully controlled by the same person `host-secrets.sh` runs as, so "another VM" was never a meaningfully different trust boundary than "the host operator" to begin with. If that stops being true - e.g. a VM running code from a source you don't fully trust with root - VM-locking by source IP alone stops being sufficient, and would need a real per-VM credential (a token minted once and stored only in that VM, checked in addition to the IP) instead.
 
-Verification: from a human interactive shell, `git push`/`git fetch` should trigger a macOS dialog naming the repo path, commit, and session; from `noclaude`, the same operation should fail immediately with no dialog, since `GIT_AUTH_SESSION` is stripped.
+**`run_heroku` - a burst-usage pattern for non-git secrets:** unlike a git push (one deliberate action), Heroku is typically used in bursts (`logs`, `ps`, `config`, a few commands while debugging, then nothing for a while), so approving every single command would be the wrong shape. `run_heroku [command...]` (in `vm-bash-aliases-block.template.sh`) fetches `heroku-api-key` once - one approval click - then runs `command` (or an interactive `$SHELL` if none given) as a *child process* with `HEROKU_API_KEY` set only in that child's environment, never exported into the calling shell itself. Exiting the child (or the subshell) removes the key from every live process again, with no separate cleanup step. `noclaude()` also clears `HEROKU_API_KEY` before launching the sandboxed agent, in case a `run_heroku` subshell is still open in the same shell tree - the same reasoning as clearing `LAPTOP_CONFIG_AUTH_SESSION` and `SSH_AUTH_SOCK`.
+
+`run_heroku`, `noclaude()`, and `LAPTOP_CONFIG_AUTH_SESSION` are all defined in `vm-bash-aliases-block.template.sh`, installed into `~/.bash_aliases` - so they're bash-only for now. A shell that doesn't source `~/.bash_aliases` (zsh's default config doesn't) won't see any of them. Supporting another shell would mean a separate file in that shell's own syntax (this file already uses bash-specific forms like `local` and `"${@:-...}"`), not just installing the same file somewhere else.
+
+Verification: from a human interactive shell, `git push`/`git fetch` should trigger a macOS dialog naming the repo path, commit, and session; from `noclaude`, the same operation should fail immediately with no dialog, since `LAPTOP_CONFIG_AUTH_SESSION` is stripped. Similarly, `run_heroku heroku auth:whoami` from a human shell should trigger one dialog and succeed; `noclaude -- run_heroku ...` (or anything reaching `secrets-client.py` without a session) should fail immediately with no dialog.
 
 **Testing the server directly:** always set `"dry_run": true` in a `/secret` request rather than sending a real one - the server never reads the secret's actual value out of Keychain in that case (see `keychain_secret_exists()`), so the response can never contain it, no matter how it's displayed. A real `/secret` response legitimately contains the secret in plaintext (that's the whole point, for the caller's benefit) - a raw `curl` against a real request once printed an actual token straight into a terminal.
 

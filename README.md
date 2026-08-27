@@ -28,7 +28,7 @@ A few pieces depend on each other, so the first pass needs this order:
    (step 2 needs it) and wires up the git credential helper - `git
    push`/`fetch` won't actually succeed yet, since the secrets server has
    no secret to give out until step 3.
-2. **On the host**: `./host-setup.sh`. Starts the git-auth proxy, generates
+2. **On the host**: `./host-setup.sh`. Starts the secrets server, generates
    the host's SSH key, builds `~/.ssh/config` from `utmctl` (now that
    qemu-guest-agent is running from step 1), and pushes the key straight to
    each VM with `ssh-copy-id` - it'll ask for that VM's login password once
@@ -41,6 +41,11 @@ After that: `ssh lftux`/`scp x lftux:` works from the host, and a human
 shell's `git push`/`git fetch` on a VM triggers a macOS approval dialog and
 succeeds; the same command run via `noclaude` fails immediately instead
 (see architecture.md's Secrets Server section).
+
+Want Heroku access from a VM too? `./host-secrets.sh set heroku-api-key`
+(see the script's printed instructions, or `rotate-heroku-key.sh`), then
+`run_heroku` on the VM - see architecture.md's Secrets Server section.
+Optional, and independent of the git setup above.
 
 Adding a new VM later: create it in UTM, then just repeat step 1 (on the
 new VM) and step 2 (on the host) - no `config.sh` edits, no commits needed,
@@ -92,13 +97,27 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   least once a year) without risking breaking `git push` mid-rotation. See
   the script's own printed output for how to actually cut over once the
   new token's confirmed stored.
+- `rotate-heroku-key.sh` - same idea as `rotate-github-pat.sh`, for
+  `heroku-api-key` - pass a VM hostname (e.g. `rotate-heroku-key.sh mytux`)
+  to store it locked to one VM instead of available to any of them.
 - `vm-setup.sh` - Ubuntu VM setup.
 - `vm-git-helper.template.py` - the VM-side git credential helper that talks
   to `secrets_server.py`.
+- `secrets-client.template.py` - generic VM-side CLI for fetching any named
+  secret from `secrets_server.py` (`secrets-client.py get <name>`) - the
+  same protocol `vm-git-helper.py` speaks, without git's credential-helper
+  format. `run_heroku` (below) is the first non-git caller.
 - `nftables.template.conf` - VM egress firewall ruleset.
 - `vm-bash-aliases-block.template.sh` - the managed block installed into each
-  VM's `~/.bash_aliases` (editor, `GIT_AUTH_SESSION`, the `noclaude()`
-  sandboxed-agent wrapper).
+  VM's `~/.bash_aliases`: editor, `LAPTOP_CONFIG_AUTH_SESSION`, the
+  `noclaude()` sandboxed-agent wrapper, and `run_heroku` (fetches
+  `heroku-api-key` once and runs a command - or an interactive shell if none
+  given - as a child process with `HEROKU_API_KEY` set only there, so a
+  burst of `heroku` commands needs one approval click instead of one per
+  command, and the key is gone again once you exit). Bash-only for now -
+  it's installed into `~/.bash_aliases`, which a shell like zsh doesn't
+  source by default; supporting another shell would mean a separate file
+  in that shell's own syntax, not just installing this one elsewhere.
 - `claude-CLAUDE.md` - global Claude Code instructions, installed to each
   VM's `~/.claude/CLAUDE.md` (Claude Code runs in the VMs, not on the host,
   so this isn't installed by host-setup.sh). If you've edited the installed

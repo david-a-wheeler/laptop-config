@@ -189,6 +189,13 @@ sudo chmod +x /usr/local/bin/vm-git-helper.py
 rm -f /tmp/vm-git-helper.py.rendered
 git config --global credential.helper /usr/local/bin/vm-git-helper.py
 
+echo "== Installing secrets-client (generic secrets-server CLI, used by run_heroku) =="
+render_template "$SCRIPT_DIR/secrets-client.template.py" /tmp/secrets-client.py.rendered \
+  SECRETS_SERVER_PORT
+sudo cp /tmp/secrets-client.py.rendered /usr/local/bin/secrets-client.py
+sudo chmod +x /usr/local/bin/secrets-client.py
+rm -f /tmp/secrets-client.py.rendered
+
 echo "== Configuring git niceties =="
 configure_git_niceties
 
@@ -198,7 +205,7 @@ if [ "$want_claude" = true ]; then
   install_unless_locally_newer "$SCRIPT_DIR/claude-CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 fi
 
-echo "== Managing ~/.bash_aliases block (editor, GIT_AUTH_SESSION, noclaude) =="
+echo "== Managing ~/.bash_aliases block (editor, LAPTOP_CONFIG_AUTH_SESSION, noclaude, run_heroku) =="
 nono_extra_read_args=""
 for path in $NONO_EXTRA_READ_PATHS; do
   nono_extra_read_args="${nono_extra_read_args}--read ${path} "
