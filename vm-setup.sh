@@ -76,9 +76,17 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
 sudo apt-get update
 sudo apt-get install -y gh
 
-echo "== Installing Claude Code (native installer) =="
-if ! command -v claude >/dev/null 2>&1; then
-  curl -fsSL https://claude.ai/install.sh | bash
+echo "== Claude Code (native installer) =="
+# Asked once ever (see ask_once in common.sh), not on every run - the
+# answer's recorded in confirmations/install-claude-code, "yes" or "no"
+# either way, so this stays silent on later runs. Delete that file to be
+# asked again.
+if ask_once install-claude-code "Install Claude Code on this VM?"; then
+  if ! command -v claude >/dev/null 2>&1; then
+    curl -fsSL https://claude.ai/install.sh | bash
+  fi
+else
+  echo "Skipping Claude Code install (recorded preference)."
 fi
 
 echo "== Rendering and applying nftables egress ruleset =="
@@ -141,9 +149,11 @@ git config --global credential.helper /usr/local/bin/vm-git-helper.py
 echo "== Configuring git niceties =="
 configure_git_niceties
 
-echo "== Installing Claude Code global instructions (CLAUDE.md) =="
-mkdir -p "$HOME/.claude"
-install_unless_locally_newer "$SCRIPT_DIR/claude-CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+if ask_once install-claude-code "Install Claude Code on this VM?"; then
+  echo "== Installing Claude Code global instructions (CLAUDE.md) =="
+  mkdir -p "$HOME/.claude"
+  install_unless_locally_newer "$SCRIPT_DIR/claude-CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+fi
 
 echo "== Managing ~/.bash_aliases block (editor, GIT_AUTH_SESSION, noclaude) =="
 nono_extra_read_args=""

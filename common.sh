@@ -139,6 +139,38 @@ confirm_once() {
   esac
 }
 
+# Usage: ask_once <name> <question>
+# Asks <question> [y/N] exactly once ever (per checkout) and remembers the
+# answer under confirmations/<name> (gitignored, same as
+# confirmation_done/mark_confirmed) - unlike confirm_once, a "no" is
+# remembered permanently here too, not re-asked next run, since this is
+# for a one-time preference (e.g. "install this optional thing?") rather
+# than polling whether a manual step got done yet. Returns success if the
+# stored or freshly-given answer is yes, failure if no. Delete
+# confirmations/<name> to be asked again.
+ask_once() {
+  name="$1"
+  question="$2"
+  flag="$SCRIPT_DIR/confirmations/$name"
+  if [ -f "$flag" ]; then
+    [ "$(cat "$flag")" = "yes" ]
+    return
+  fi
+  printf '%s [y/N] ' "$question"
+  read -r response
+  mkdir -p "$SCRIPT_DIR/confirmations"
+  case "$response" in
+    y | Y | yes | YES)
+      echo "yes" > "$flag"
+      return 0
+      ;;
+    *)
+      echo "no" > "$flag"
+      return 1
+      ;;
+  esac
+}
+
 # Sets the git config values that make git pleasant to use day-to-day.
 # GIT_USER_NAME/GIT_USER_EMAIL come from config.sh; the rest are fixed
 # defaults worth having everywhere (fsck on transfer/fetch catches repo
