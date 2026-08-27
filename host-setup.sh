@@ -18,24 +18,27 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/config.sh"
 . "$SCRIPT_DIR/common.sh"
 
-echo "== Checking for Full Disk Access =="
-# Recent macOS hides /Users entirely (ENOENT, not even "permission denied")
-# from a process without Full Disk Access - which breaks "id"/"dscl"
-# account lookups later in this script. Real incident: without this check,
-# the _infer step below silently gave a false "account doesn't exist"
-# result instead of failing with a useful reason. Fail fast here instead.
-if ! ls /Users >/dev/null 2>&1; then
-  cat <<EOF >&2
-ERROR: can't read /Users - this terminal app doesn't have Full Disk
-Access, which recent macOS requires for account/directory lookups (id,
-dscl) that later steps in this script depend on.
-
-Fix: System Settings > Privacy & Security > Full Disk Access > enable it
-for whatever app you're running this script from (Terminal, iTerm2, etc.),
-then re-run this script.
-EOF
-  exit 1
-fi
+# Disabled: the check below was added after "ls /Users" failed with
+# ENOENT, which looked like a Full Disk Access problem - but that test was
+# run over an ssh session into the Linux VM, which has no /Users at all
+# (it has /home); nothing was actually confirmed broken on macOS itself.
+# Left here commented out, not deleted, in case FDA does turn out to be a
+# real precondition later - uncomment and verify against an actual Mac
+# shell first.
+#
+# echo "== Checking for Full Disk Access =="
+# if ! ls /Users >/dev/null 2>&1; then
+#   cat <<EOF >&2
+# ERROR: can't read /Users - this terminal app doesn't have Full Disk
+# Access, which recent macOS requires for account/directory lookups (id,
+# dscl) that later steps in this script depend on.
+#
+# Fix: System Settings > Privacy & Security > Full Disk Access > enable it
+# for whatever app you're running this script from (Terminal, iTerm2, etc.),
+# then re-run this script.
+# EOF
+#   exit 1
+# fi
 
 echo "== Locking down home directory (macOS grants 'staff' group read by default) =="
 chmod go-rwx "$HOME"
