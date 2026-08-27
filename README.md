@@ -54,6 +54,16 @@ Settings > QEMU in UTM if it's not showing up in `~/.ssh/config`. If
 `ssh-copy-id` failed for a VM (host-setup.sh prints a warning naming it),
 re-run `./host-setup.sh` once the VM's actually reachable.
 
+## Network egress is restricted
+
+VMs can only reach a handful of outbound ports by default: SSH (22),
+HTTP/HTTPS (80/443), DNS, and the host git-auth proxy - see `config.sh`'s
+`NFTABLES_ALLOWED_TCP_PORTS`. This is deliberate (see architecture.md's
+Security Controls Summary), not a bug - if something inside a VM can't
+reach the network and you're not sure why, this is the first thing to
+check. Add the port to `NFTABLES_ALLOWED_TCP_PORTS` in `config.sh` and
+re-run `vm-setup.sh`, rather than disabling nftables to work around it.
+
 ## Files
 
 - `config.sh` - person/machine-specific values (name, email, ports, ...).
