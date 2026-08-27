@@ -116,13 +116,45 @@ echo "== Hardening CUPS (unix socket only, no TCP listener) =="
 sudo sed -i '/^[[:space:]]*Listen localhost:631/s/^/#/' /etc/cups/cupsd.conf
 sudo systemctl restart cups
 
-echo "== Checking for nono =="
-# Not installed here: we don't have a verified install command to embed
-# blindly. Install per https://nono.sh/docs/cli/getting_started/installation
-# if this warns.
-if ! command -v nono >/dev/null 2>&1; then
-  echo "WARNING: nono not found on PATH. Install it manually:" >&2
-  echo "  https://nono.sh/docs/cli/getting_started/installation" >&2
+echo "== Installing/updating nono =="
+# nono ships prebuilt .deb/.rpm on GitHub Releases - no real apt repo
+# backs it (confirmed earlier: apt-cache policy showed nothing), so this
+# fetches the latest release's .deb for this VM's architecture directly
+# and dpkg -i's it, the same way it's actually installed on lftux already
+# (confirmed via dpkg.log: a direct "dpkg -i" of a downloaded .deb, not
+# apt/a script). Re-running this always grabs whatever's currently latest,
+# so updating nono is just re-running vm-setup.sh. Cargo/Homebrew (the
+# project's other documented options) would mean a whole extra toolchain
+# just to build a 25 MB tool we can get prebuilt.
+nono_arch="$(dpkg --print-architecture)"
+nono_deb_url="$(curl -fsSL https://api.github.com/repos/nolabs-ai/nono/releases/latest \
+  | grep -o "https://github.com/nolabs-ai/nono/releases/download/[^\"]*_${nono_arch}\.deb" \
+  | head -1)"
+if [ -n "$nono_deb_url" ]; then
+  # Version comes from the release tag in the URL path
+  # (.../download/v0.74.0/...), not the .deb filename - decouples this
+  # from nono's asset-naming convention, only relies on GitHub's own
+  # release-asset URL structure. dpkg-query fails (nonzero) if nono-cli
+  # isn't installed yet, which is expected, not an error - old_version
+  # just stays empty in that case.
+  nono_new_version="$(printf '%s' "$nono_deb_url" | sed -n 's#.*/releases/download/\([^/]*\)/.*#\1#p')"
+  nono_new_version="${nono_new_version#v}"
+  nono_old_version="$(dpkg-query -W -f='${Version}' nono-cli 2>/dev/null || true)"
+  if [ -n "$nono_old_version" ] && [ "$nono_old_version" = "$nono_new_version" ]; then
+    echo "nono is already up to date (version $nono_new_version)."
+  else
+    curl -fsSL "$nono_deb_url" -o /tmp/nono-cli.deb
+    sudo dpkg -i /tmp/nono-cli.deb
+    rm -f /tmp/nono-cli.deb
+    if [ -n "$nono_old_version" ]; then
+      echo "Updated nono: $nono_old_version -> $nono_new_version"
+    else
+      echo "Installed nono $nono_new_version (was not previously installed)."
+    fi
+  fi
+else
+  echo "WARNING: couldn't find a nono .deb release for architecture $nono_arch - install manually:" >&2
+  echo "  https://github.com/nolabs-ai/nono/releases" >&2
 fi
 
 echo "== Installing vm-git-helper (git credential helper) =="
