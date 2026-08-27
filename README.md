@@ -80,7 +80,14 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   record per request (approved/denied/errored, never the secret itself) to
   `/tmp/git_host_proxy.log`, flushed immediately - `tail -f` it while
   diagnosing.
-- `host-secrets.sh` - add/rotate the named secrets `git_host_proxy.py` serves.
+- `host-secrets.sh` - add/rotate/delete the named secrets `git_host_proxy.py`
+  serves.
+- `rotate-github-pat.sh` - creates a new GitHub PAT and stores it under
+  `github-pat` in Keychain, without touching `config.sh` or the currently
+  active secret - safe to run any time (GitHub PATs expire, so expect at
+  least once a year) without risking breaking `git push` mid-rotation. See
+  the script's own printed output for how to actually cut over once the
+  new token's confirmed stored.
 - `vm-setup.sh` - Ubuntu VM setup.
 - `vm-git-helper.template.py` - the VM-side git credential helper that talks
   to `git_host_proxy.py`.

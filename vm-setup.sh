@@ -10,20 +10,14 @@
 # macOS host, for that.
 set -eu
 
-# This script is Linux-only for now (no dependencies loaded yet, so check
-# this before anything else can fail confusingly on the wrong machine) -
-# might loosen this later, but only Ubuntu VMs are supported today, so
-# fail clearly rather than let apt/systemctl/etc. produce confusing errors
-# on a machine that doesn't have them.
-if [ "$(uname -s)" != "Linux" ]; then
-  echo "ERROR: vm-setup.sh is for the Ubuntu VMs only (this machine reports '$(uname -s)')." >&2
-  echo "  Run host-setup.sh instead if this is the macOS host." >&2
-  exit 1
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/config.sh"
 . "$SCRIPT_DIR/common.sh"
+
+# This script is Linux-only for now - might loosen this later, but only
+# Ubuntu VMs are supported today, so fail clearly rather than let
+# apt/systemctl/etc. produce confusing errors on a machine without them.
+linux_only "vm-setup.sh"
 
 echo "== Installing base packages =="
 # openssh/avahi/cups/nftables per architecture.md's discovery+services

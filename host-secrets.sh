@@ -8,19 +8,25 @@
 #
 # Usage:
 #   host-secrets.sh list
-#   host-secrets.sh set  <name>   # interactive; prints instructions for
-#                                  # known names, asks before overwriting
-#   host-secrets.sh get  <name>   # prints the secret to stdout (careful)
+#   host-secrets.sh set    <name>   # interactive; prints instructions for
+#                                    # known names, asks before overwriting
+#   host-secrets.sh get    <name>   # prints the secret to stdout (careful)
+#   host-secrets.sh delete <name>   # asks for confirmation first
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/config.sh"
+. "$SCRIPT_DIR/common.sh"
+
+# Host-only (Keychain via "security" doesn't exist on Linux).
+macos_only "host-secrets.sh"
 
 usage() {
   cat <<EOF >&2
 Usage: $0 list
        $0 set <name>
        $0 get <name>
+       $0 delete <name>
 
 Named secrets currently referenced by config.sh's GIT_SECRETS:
 $(for pair in $GIT_SECRETS; do echo "  ${pair#*:}  (for ${pair%%:*})"; done)
@@ -53,7 +59,7 @@ cmd_get() {
 # up in config.sh's GIT_SECRETS - this is the intended extension point.
 print_recipe() {
   case "$1" in
-    git-host-proxy-pat)
+    github-pat)
       cat <<EOF
 
 Create a GitHub Personal Access Token:
@@ -92,12 +98,32 @@ cmd_set() {
     echo "Empty input, not storing anything." >&2
     return 1
   fi
+  echo "(Received ${#token} characters.)"
 
   if secret_exists "$name"; then
     security delete-generic-password -s "$name" >/dev/null 2>&1
   fi
   security add-generic-password -a "$USER" -s "$name" -w "$token"
   echo "Stored $name in Keychain."
+}
+
+cmd_delete() {
+  name="$1"
+  if ! secret_exists "$name"; then
+    echo "$name isn't in Keychain - nothing to delete."
+    return 0
+  fi
+  printf '%s' "Delete $name from Keychain? This can't be undone. [y/N] "
+  read -r confirm
+  case "$confirm" in
+    y | Y | yes | YES)
+      security delete-generic-password -s "$name" >/dev/null 2>&1
+      echo "Deleted $name from Keychain."
+      ;;
+    *)
+      echo "Leaving $name unchanged."
+      ;;
+  esac
 }
 
 [ $# -ge 1 ] || usage
@@ -114,6 +140,10 @@ case "$cmd" in
   set)
     [ $# -ge 1 ] || usage
     cmd_set "$1"
+    ;;
+  delete)
+    [ $# -ge 1 ] || usage
+    cmd_delete "$1"
     ;;
   *)
     usage

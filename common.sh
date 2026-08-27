@@ -8,6 +8,27 @@
 #   . "$(dirname "$0")/config.sh"
 #   . "$(dirname "$0")/common.sh"
 
+# Usage: macos_only <script-name-for-the-error-message>
+# Exits with a clear error if this isn't running on macOS. Call this right
+# after sourcing config.sh/common.sh (sourcing them is harmless on any
+# platform - just variable/function definitions - so it's fine for the
+# check to come after that, not before).
+macos_only() {
+  if [ "$(uname -s)" != "Darwin" ]; then
+    echo "ERROR: $1 is for the macOS host only (this machine reports '$(uname -s)')." >&2
+    exit 1
+  fi
+}
+
+# Usage: linux_only <script-name-for-the-error-message>
+# Exits with a clear error if this isn't running on Linux (the Ubuntu VMs).
+linux_only() {
+  if [ "$(uname -s)" != "Linux" ]; then
+    echo "ERROR: $1 is for the Ubuntu VMs only (this machine reports '$(uname -s)')." >&2
+    exit 1
+  fi
+}
+
 # Usage: render_template <template-file> <dest-file> <VAR1> [<VAR2> ...]
 # Substitutes every "@@VAR@@" in <template-file> with the current value of
 # shell variable VAR (one already set, typically by config.sh), for each VAR
