@@ -272,14 +272,21 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
                              title: str = "Git Security Gatekeeper") -> bool:
     """Shows the AppleScript approval dialog; returns whether Authorize was
     clicked. Shared by the real and dry-run paths so there's exactly one
-    place that builds and runs the osascript command. Logs a warning if
+    place that builds and runs the osascript command. Defaults to
+    Authorize (a bare Enter approves) rather than Deny - this dialog only
+    ever fires for a request carrying a live GIT_AUTH_SESSION, which
+    noclaude() strips before an AI agent ever gets near it (see
+    vm-bash-aliases-block.template.sh), so in practice it's gating routine
+    human git operations, not an adversarial AI - a dialog you have to
+    read the button label on every single push is worse than the marginal
+    security value of "wrong button by default." Logs a warning if
     osascript itself produced stderr output - that's how a dialog that
     failed to display (as opposed to a real Deny click) shows up.
     """
     applescript = (
         f'display dialog "{prompt_text}" with title'
         f' "{_applescript_escape(title)}"'
-        ' buttons {"Deny", "Authorize"} default button "Deny"'
+        ' buttons {"Deny", "Authorize"} default button "Authorize"'
     )
     res = subprocess.run(
         ["osascript", "-e", applescript], capture_output=True, text=True
