@@ -113,7 +113,8 @@ else
   echo "WARNING: utmctl not found at $UTMCTL - skipping ~/.ssh/config setup. Check UTMCTL in config.sh." >&2
 fi
 
-cat <<EOF
+if ! confirmation_done battery; then
+  cat <<EOF
 
 == Power settings (System Settings > Battery) ==
 
@@ -133,8 +134,8 @@ Also: keep the case open, and the back of the laptop raised if practical,
 for airflow.
 
 EOF
-printf '%s' "Press Enter once you've checked these: "
-read -r _
+  confirm_once battery
+fi
 
 echo "== Configuring git niceties =="
 configure_git_niceties

@@ -82,6 +82,42 @@ install_unless_locally_newer() {
   cp "$src" "$dest"
 }
 
+# Usage: confirmation_done <name>
+# True if <name> has previously been confirmed done (see mark_confirmed).
+# For a manual step with no reliable way to check its actual state (a
+# GUI-only System Settings toggle, say) - lets it prompt once instead of on
+# every run. Stored per-checkout under confirmations/ (gitignored: host and
+# each VM confirm their own steps independently, and it's not something
+# anyone else's clone should inherit).
+confirmation_done() {
+  [ -f "$SCRIPT_DIR/confirmations/$1" ]
+}
+
+# Usage: mark_confirmed <name>
+# Records that <name> is done, so confirmation_done <name> is true from
+# here on.
+mark_confirmed() {
+  mkdir -p "$SCRIPT_DIR/confirmations"
+  touch "$SCRIPT_DIR/confirmations/$1"
+}
+
+# Usage: confirm_once <name>
+# Prompts once for whether <name> is actually done, defaulting to "no" (a
+# bare Enter means "keep asking next run," not "assume it's done") - only
+# an explicit yes calls mark_confirmed. Call this after printing whatever
+# instructions <name> needs, and only inside an
+# `if ! confirmation_done <name>; then ... fi` block, so it's never shown
+# again once confirmed.
+confirm_once() {
+  name="$1"
+  printf '%s' "Confirmed these are set - stop asking? [y/N] "
+  read -r response
+  case "$response" in
+    y | Y | yes | YES) mark_confirmed "$name" ;;
+    *) : ;;
+  esac
+}
+
 # Sets the git config values that make git pleasant to use day-to-day.
 # GIT_USER_NAME/GIT_USER_EMAIL come from config.sh; the rest are fixed
 # defaults worth having everywhere (fsck on transfer/fetch catches repo
