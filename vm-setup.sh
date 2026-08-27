@@ -77,16 +77,26 @@ sudo apt-get update
 sudo apt-get install -y gh
 
 echo "== Claude Code (native installer) =="
-# Asked once ever (see ask_once in common.sh), not on every run - the
-# answer's recorded in confirmations/install-claude-code, "yes" or "no"
-# either way, so this stays silent on later runs. Delete that file to be
-# asked again.
-if ask_once install-claude-code "Install Claude Code on this VM?"; then
-  if ! command -v claude >/dev/null 2>&1; then
-    curl -fsSL https://claude.ai/install.sh | bash
-  fi
+# Asked once ever (see ask_once in common.sh) when claude isn't already
+# on PATH - no point asking whether to install something clearly already
+# there, and re-checking "command -v claude" here (rather than persisting
+# that fact anywhere) means this self-corrects if claude's ever
+# uninstalled later, instead of trusting a flag that could go stale.
+# want_claude is captured once and reused below (for the CLAUDE.md step)
+# rather than re-running "command -v claude" there too - right after a
+# fresh install in this same run, that check could false-negative: the
+# native installer's ~/.local/bin only lands on PATH via the
+# .bash_aliases block this script installs, which a fresh shell hasn't
+# sourced yet mid-run.
+if command -v claude >/dev/null 2>&1; then
+  echo "Claude Code is already installed."
+  want_claude=true
+elif ask_once install-claude-code "Install Claude Code on this VM?"; then
+  curl -fsSL https://claude.ai/install.sh | bash
+  want_claude=true
 else
   echo "Skipping Claude Code install (recorded preference)."
+  want_claude=false
 fi
 
 echo "== Rendering and applying nftables egress ruleset =="
@@ -181,7 +191,7 @@ git config --global credential.helper /usr/local/bin/vm-git-helper.py
 echo "== Configuring git niceties =="
 configure_git_niceties
 
-if ask_once install-claude-code "Install Claude Code on this VM?"; then
+if [ "$want_claude" = true ]; then
   echo "== Installing Claude Code global instructions (CLAUDE.md) =="
   mkdir -p "$HOME/.claude"
   install_unless_locally_newer "$SCRIPT_DIR/claude-CLAUDE.md" "$HOME/.claude/CLAUDE.md"
