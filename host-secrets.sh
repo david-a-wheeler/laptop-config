@@ -89,15 +89,36 @@ cmd_set() {
   fi
 
   print_recipe "$name"
-  printf '%s' "Paste the secret for $name: "
-  stty -echo
-  read -r token
-  stty echo
-  echo
-  if [ -z "$token" ]; then
-    echo "Empty input, not storing anything." >&2
-    return 1
-  fi
+  # Secrets this short are almost certainly a mistake (empty paste, partial
+  # paste, a stray keystroke) rather than a real one - ask again instead of
+  # silently storing something useless. The traps guarantee terminal echo
+  # gets restored no matter how this ends, including Ctrl-C - tested and
+  # confirmed the EXIT trap alone does NOT fire on an untrapped SIGINT
+  # (dash terminates immediately on the signal's default disposition), so
+  # INT/TERM/HUP need their own explicit handler too.
+  min_length=9
+  trap 'stty echo' EXIT
+  trap 'stty echo; exit 1' INT TERM HUP
+  while :; do
+    printf '%s' "Paste the secret for $name: "
+    stty -echo
+    if ! read -r token; then
+      # Not a cancel path - Ctrl-C skips this entirely (see above). This
+      # is EOF/closed stdin (e.g. run non-interactively), where retrying
+      # would just spin forever re-reading nothing.
+      stty echo
+      echo
+      echo "No more input - giving up." >&2
+      exit 1
+    fi
+    stty echo
+    echo
+    if [ "${#token}" -ge "$min_length" ]; then
+      break
+    fi
+    echo "That's only ${#token} character(s) - doesn't look like a real secret. Try again (Ctrl-C to cancel)." >&2
+  done
+  trap - EXIT INT TERM HUP
   echo "(Received ${#token} characters.)"
 
   if secret_exists "$name"; then
