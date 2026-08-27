@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """macOS Host Git Authorization Proxy Server.
 
-Listens on the virtual bridge interface, queries Keychain, and prompts for
-human approval.
+Listens on the virtual bridge interface, queries Keychain for a named
+secret, and prompts for human approval before releasing it. Generalized to
+serve any secret stored in Keychain (not just a single GitHub PAT): the
+caller (vm-git-helper.py, running in a VM) names which Keychain service it
+wants via "secret_name" in the request payload, resolved on the VM side
+from config.sh's GIT_SECRETS map. The approval dialog always names the
+requested secret, so a request for something unexpected is easy to catch
+and deny by hand, even though we don't otherwise restrict which service
+name a caller may ask for.
 """
 import json
 import re
@@ -12,7 +19,6 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LISTEN_PORT = 9876
-KEYCHAIN_SERVICE_NAME = "git-host-proxy-pat"
 
 
 def get_virtual_bridge_ip() -> str:
@@ -35,15 +41,15 @@ def get_virtual_bridge_ip() -> str:
   return "127.0.0.1"
 
 
-def get_token_from_keychain() -> str:
-  """Retrieves the encrypted GitHub PAT directly from macOS Keychain."""
+def get_secret_from_keychain(service_name: str) -> str:
+  """Retrieves a named secret directly from macOS Keychain."""
   try:
     return subprocess.check_output(
         [
             "security",
             "find-generic-password",
             "-s",
-            KEYCHAIN_SERVICE_NAME,
+            service_name,
             "-w",
         ],
         text=True,
@@ -51,6 +57,17 @@ def get_token_from_keychain() -> str:
     ).strip()
   except subprocess.CalledProcessError:
     return ""
+
+
+def _applescript_escape(s: str) -> str:
+  """Escapes a string for safe embedding in an AppleScript string literal.
+
+  repo_path/commit_info come from the requesting VM (commit_info is derived
+  from a commit message, which is attacker-influenceable if you ever clone
+  something untrusted), so without this a crafted value could break out of
+  the quoted string and run arbitrary AppleScript via osascript.
+  """
+  return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
 class AuthProxyHandler(BaseHTTPRequestHandler):
@@ -73,6 +90,7 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
     session_id = payload.get("session", "")
     repo_path = payload.get("path", "Unknown Path")
     commit_info = payload.get("commit", "No commit details")
+    secret_name = payload.get("secret_name", "")
 
     if not session_id:
       self._respond(
@@ -80,8 +98,14 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
       )
       return
 
-    token = get_token_from_keychain()
-    if not token:
+    if not secret_name:
+      self._respond(
+          {"status": "denied", "reason": "Missing secret_name"}, 400
+      )
+      return
+
+    secret = get_secret_from_keychain(secret_name)
+    if not secret:
       self._respond(
           {"status": "error", "reason": "Keychain secret not found"}, 500
       )
@@ -89,10 +113,11 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
 
     prompt_text = (
         f"Git Authentication Request\n\n"
-        f"Target Path: {repo_path}\n"
-        f"Local Context: {commit_info}\n"
-        f"Session ID: {session_id[:8]}...\n\n"
-        f"Authorize token access for this operation?"
+        f"Secret: {_applescript_escape(secret_name)}\n"
+        f"Target Path: {_applescript_escape(repo_path)}\n"
+        f"Local Context: {_applescript_escape(commit_info)}\n"
+        f"Session ID: {_applescript_escape(session_id[:8])}...\n\n"
+        f"Authorize access for this operation?"
     )
 
     applescript = (
@@ -105,7 +130,7 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
     )
 
     if "button returned:Authorize" in res.stdout:
-      self._respond({"status": "approved", "token": token}, 200)
+      self._respond({"status": "approved", "token": secret}, 200)
     else:
       self._respond(
           {"status": "denied", "reason": "User rejected request"}, 403

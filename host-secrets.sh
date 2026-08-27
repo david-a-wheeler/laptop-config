@@ -1,0 +1,121 @@
+#!/bin/sh
+# host-secrets.sh - manage the named secrets git_host_proxy.py serves out of
+# macOS Keychain. Run on the host only; VMs never store secrets. Kept
+# separate from host-setup.sh so a plain "git pull && ./host-setup.sh" can
+# never touch a stored secret. POSIX sh throughout - the token prompt below
+# masks input with stty rather than bash's "read -s", since we don't rely
+# on what /bin/sh actually is.
+#
+# Usage:
+#   host-secrets.sh list
+#   host-secrets.sh set  <name>   # interactive; prints instructions for
+#                                  # known names, asks before overwriting
+#   host-secrets.sh get  <name>   # prints the secret to stdout (careful)
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/config.sh"
+
+usage() {
+  cat <<EOF >&2
+Usage: $0 list
+       $0 set <name>
+       $0 get <name>
+
+Named secrets currently referenced by config.sh's GIT_SECRETS:
+$(for pair in $GIT_SECRETS; do echo "  ${pair#*:}  (for ${pair%%:*})"; done)
+EOF
+  exit 1
+}
+
+secret_exists() {
+  security find-generic-password -s "$1" >/dev/null 2>&1
+}
+
+cmd_list() {
+  for pair in $GIT_SECRETS; do
+    host="${pair%%:*}"
+    name="${pair#*:}"
+    if secret_exists "$name"; then
+      state="present"
+    else
+      state="MISSING"
+    fi
+    echo "$name (for $host): $state"
+  done
+}
+
+cmd_get() {
+  security find-generic-password -s "$1" -w
+}
+
+# Per-secret setup instructions. Add a case here as new named secrets show
+# up in config.sh's GIT_SECRETS - this is the intended extension point.
+print_recipe() {
+  case "$1" in
+    git-host-github-pat)
+      cat <<EOF
+
+Create a GitHub Personal Access Token:
+  1. Open https://github.com/settings/tokens
+  2. Generate new token (classic) - scopes: repo, workflow.
+  3. Copy the token (starts with "ghp_" or "github_pat_").
+EOF
+      ;;
+    *)
+      echo "No setup recipe for '$1' yet - add one to host-secrets.sh's print_recipe()." >&2
+      ;;
+  esac
+}
+
+cmd_set() {
+  name="$1"
+  if secret_exists "$name"; then
+    printf '%s already exists in Keychain. Overwrite? [y/N] ' "$name"
+    read -r confirm
+    case "$confirm" in
+      y | Y | yes | YES) : ;;
+      *)
+        echo "Leaving $name unchanged."
+        return 0
+        ;;
+    esac
+  fi
+
+  print_recipe "$name"
+  printf '%s' "Paste the secret for $name: "
+  stty -echo
+  read -r token
+  stty echo
+  echo
+  if [ -z "$token" ]; then
+    echo "Empty input, not storing anything." >&2
+    return 1
+  fi
+
+  if secret_exists "$name"; then
+    security delete-generic-password -s "$name" >/dev/null 2>&1
+  fi
+  security add-generic-password -a "$USER" -s "$name" -w "$token"
+  echo "Stored $name in Keychain."
+}
+
+[ $# -ge 1 ] || usage
+cmd="$1"
+shift
+case "$cmd" in
+  list)
+    cmd_list
+    ;;
+  get)
+    [ $# -ge 1 ] || usage
+    cmd_get "$1"
+    ;;
+  set)
+    [ $# -ge 1 ] || usage
+    cmd_set "$1"
+    ;;
+  *)
+    usage
+    ;;
+esac

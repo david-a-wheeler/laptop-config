@@ -1,0 +1,6 @@
+# config.sh's variables are consumed dynamically (via "eval" in common.sh's
+# render_template, and by name across sourced files) in ways shellcheck's
+# single-file, non-eval-aware analysis can't trace, so these two fire as
+# false positives throughout this repo's scripts.
+disable=SC2034
+disable=SC2154
