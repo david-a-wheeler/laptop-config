@@ -56,7 +56,10 @@ Settings > QEMU in UTM if it's not showing up in `~/.ssh/config`.
 ## Files
 
 - `config.sh` - person/machine-specific values (name, email, ports, ...).
-  Edit this to adapt the repo to your own setup.
+  Reusing this repo for your own setup? Rather than editing this tracked
+  file, copy `config.local.sh.example` to `config.local.sh` (gitignored)
+  and set overrides there - `config.sh` sources it last, so anything set
+  there wins, and your `git pull`s of this repo stay clean.
 - `common.sh` - shared shell functions (`host-setup.sh`/`vm-setup.sh` source
   it): template rendering, idempotent block-insertion into dotfiles, git
   config niceties, and a "don't clobber a locally-edited file" install helper.

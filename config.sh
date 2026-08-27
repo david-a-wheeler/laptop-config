@@ -5,8 +5,11 @@
 # dash).
 #
 # Sourced (not executed) by host-setup.sh, vm-setup.sh, host-secrets.sh, and
-# common.sh's render_template(). Copy this repo and edit these values if you
-# want to reuse the scripts for your own setup.
+# common.sh's render_template(). To reuse the scripts for your own setup
+# without editing this tracked file (so a `git pull` of upstream changes
+# stays clean), copy config.local.sh.example to config.local.sh and set
+# overrides there instead - it's sourced last, after every default below,
+# and is gitignored.
 
 # Git identity (used by common.sh's configure_git_niceties).
 GIT_USER_NAME="David A. Wheeler"
@@ -59,3 +62,13 @@ NONO_EXTRA_READ_PATHS="$HOME/.rbenv"
 # Off by default: architecture.md marked this speculative, and it's unrelated
 # to git auth.
 ENABLE_INFERENCE_SSH_TUNNEL="false"
+
+# Local, uncommitted overrides - anything set here wins, since this loads
+# last. $SCRIPT_DIR is already set by whichever script sourced this one
+# (host-setup.sh, vm-setup.sh, host-secrets.sh all set it before sourcing
+# config.sh). Silently does nothing if config.local.sh doesn't exist - see
+# config.local.sh.example to create one.
+if [ -f "$SCRIPT_DIR/config.local.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$SCRIPT_DIR/config.local.sh"
+fi
