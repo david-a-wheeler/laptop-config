@@ -14,6 +14,19 @@
 # the first host-setup.sh, and again whenever a token needs rotating).
 set -eu
 
+# This script is macOS-only for now (no dependencies loaded yet, so check
+# this before anything else can fail confusingly on the wrong machine) -
+# real incident: this got run on an Ubuntu VM by mistake, and its
+# Mac-specific checks further down produced misleading results (no /Users,
+# no _infer account - neither of which means anything on Linux) instead of
+# just saying "wrong machine." Might loosen this later (e.g. a Linux host),
+# but that's not supported today, so fail clearly rather than guess.
+if [ "$(uname -s)" != "Darwin" ]; then
+  echo "ERROR: host-setup.sh is for the macOS host only (this machine reports '$(uname -s)')." >&2
+  echo "  Run vm-setup.sh instead if this is one of the Ubuntu VMs." >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/config.sh"
 . "$SCRIPT_DIR/common.sh"
