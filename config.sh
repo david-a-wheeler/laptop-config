@@ -34,7 +34,7 @@ HOST_PROXY_PORT="9876"
 # the right secret name here for whatever git host it's asked to authenticate.
 # Add an entry here (and run host-secrets.sh set <service> on the host) to
 # bring another git host under the proxy; no script changes needed.
-GIT_SECRETS="github.com:git-host-proxy-pat"
+GIT_SECRETS="github.com:github-pat"
 
 # Path to UTM's utmctl CLI, not on PATH by default since it ships inside
 # the app bundle. host-setup.sh uses it to look up each running VM's name
