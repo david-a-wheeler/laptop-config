@@ -10,15 +10,43 @@ from config.sh's GIT_SECRETS map. The approval dialog always names the
 requested secret, so a request for something unexpected is easy to catch
 and deny by hand, even though we don't otherwise restrict which service
 name a caller may ask for.
+
+Logs one JSON object per line to stdout (see log_event) for every request
+this handles, approved/denied/errored - not just crashes. This exists
+because of a real incident: the process was alive and correctly bound, but
+something (still unclear - see git log) was refusing incoming connections,
+and the LaunchAgent's log files were sitting empty the whole time. Empty
+logs while diagnosing "is it even receiving requests" wasted real time;
+now every request leaves a line, flushed immediately, whether or not
+anything goes wrong.
 """
 import json
 import re
 import socket
 import subprocess
-import sys
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LISTEN_PORT = 9876
+
+
+def log_event(level: str, event: str, **fields) -> None:
+  """Writes one JSONL record to stdout and flushes immediately.
+
+  The LaunchAgent redirects stdout to git_host_proxy.log with no terminal
+  attached, and Python fully buffers stdout by default when it's not a
+  tty - lines can sit unwritten until the process exits. flush=True here
+  is what makes a log line show up right away instead. Never pass a field
+  containing the actual secret/token value - secret_name (which one was
+  requested) is fine to log, the secret itself is not.
+  """
+  record = {
+      "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+      "level": level,
+      "event": event,
+  }
+  record.update(fields)
+  print(json.dumps(record, sort_keys=True), flush=True)
 
 
 def get_virtual_bridge_ip() -> str:
@@ -73,7 +101,11 @@ def _applescript_escape(s: str) -> str:
 class AuthProxyHandler(BaseHTTPRequestHandler):
 
   def do_POST(self):
+    client_ip = self.client_address[0]
+    log_event("info", "request_received", path=self.path, client=client_ip)
+
     if self.path != "/token":
+      log_event("warning", "unknown_path", path=self.path, client=client_ip)
       self.send_response(404)
       self.end_headers()
       return
@@ -83,7 +115,11 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
 
     try:
       payload = json.loads(body.decode("utf-8"))
-    except Exception:
+    except Exception as e:
+      log_event(
+          "warning", "token_denied", reason="invalid_json",
+          client=client_ip, detail=str(e),
+      )
       self._respond({"status": "denied", "reason": "Invalid JSON"}, 400)
       return
 
@@ -93,12 +129,20 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
     secret_name = payload.get("secret_name", "")
 
     if not session_id:
+      log_event(
+          "warning", "token_denied", reason="missing_session",
+          client=client_ip, secret_name=secret_name,
+      )
       self._respond(
           {"status": "denied", "reason": "Missing GIT_AUTH_SESSION"}, 403
       )
       return
 
     if not secret_name:
+      log_event(
+          "warning", "token_denied", reason="missing_secret_name",
+          client=client_ip,
+      )
       self._respond(
           {"status": "denied", "reason": "Missing secret_name"}, 400
       )
@@ -106,6 +150,10 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
 
     secret = get_secret_from_keychain(secret_name)
     if not secret:
+      log_event(
+          "error", "token_error", reason="keychain_secret_not_found",
+          client=client_ip, secret_name=secret_name,
+      )
       self._respond(
           {"status": "error", "reason": "Keychain secret not found"}, 500
       )
@@ -125,13 +173,26 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
         ' buttons {"Deny", "Authorize"} default button "Deny"'
     )
 
+    log_event(
+        "info", "token_prompt_shown", client=client_ip,
+        secret_name=secret_name, session=session_id[:8], path=repo_path,
+    )
     res = subprocess.run(
         ["osascript", "-e", applescript], capture_output=True, text=True
     )
 
     if "button returned:Authorize" in res.stdout:
+      log_event(
+          "info", "token_approved", client=client_ip,
+          secret_name=secret_name, session=session_id[:8],
+      )
       self._respond({"status": "approved", "token": secret}, 200)
     else:
+      log_event(
+          "info", "token_denied", reason="user_rejected", client=client_ip,
+          secret_name=secret_name, session=session_id[:8],
+          osascript_stderr=res.stderr.strip() or None,
+      )
       self._respond(
           {"status": "denied", "reason": "User rejected request"}, 403
       )
@@ -143,17 +204,20 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
     self.wfile.write(json.dumps(data).encode("utf-8"))
 
   def log_message(self, format, *args):
+    # Suppressed in favor of the explicit log_event calls above, which
+    # carry more useful structure than BaseHTTPRequestHandler's default
+    # access-log line.
     pass
 
 
 def main():
   listen_host = get_virtual_bridge_ip()
-  print(f"[*] Host Auth Proxy listening on {listen_host}:{LISTEN_PORT}")
+  log_event("info", "startup", listen_host=listen_host, listen_port=LISTEN_PORT)
   server = HTTPServer((listen_host, LISTEN_PORT), AuthProxyHandler)
   try:
     server.serve_forever()
   except KeyboardInterrupt:
-    print("\n[*] Shutting down.")
+    log_event("info", "shutdown", reason="keyboard_interrupt")
 
 
 if __name__ == "__main__":

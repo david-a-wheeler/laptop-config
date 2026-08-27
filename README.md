@@ -66,7 +66,10 @@ re-run `./host-setup.sh` once the VM's actually reachable.
   config niceties, and a "don't clobber a locally-edited file" install helper.
 - `host-setup.sh` - macOS host setup.
 - `git_host_proxy.py`, `com.user.githostproxy.template.plist` - the host-side
-  git-auth proxy (see architecture.md) and its LaunchAgent.
+  git-auth proxy (see architecture.md) and its LaunchAgent. Logs one JSONL
+  record per request (approved/denied/errored, never the secret itself) to
+  `/tmp/git_host_proxy.log`, flushed immediately - `tail -f` it while
+  diagnosing.
 - `host-secrets.sh` - add/rotate the named secrets `git_host_proxy.py` serves.
 - `vm-setup.sh` - Ubuntu VM setup.
 - `vm-git-helper.template.py` - the VM-side git credential helper that talks
