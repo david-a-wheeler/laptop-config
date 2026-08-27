@@ -71,18 +71,27 @@ EOF
   fi
 fi
 
-echo "== Installing git_host_proxy.py =="
+echo "== Installing secrets_server.py =="
 mkdir -p "$HOME/bin"
-cp "$SCRIPT_DIR/git_host_proxy.py" "$HOME/bin/git_host_proxy.py"
-chmod +x "$HOME/bin/git_host_proxy.py"
+render_template "$SCRIPT_DIR/secrets_server.template.py" "$HOME/bin/secrets_server.py" \
+  SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL
+chmod +x "$HOME/bin/secrets_server.py"
+# Cleanup from the pre-rename layout (git_host_proxy.py) - harmless if
+# these were never present.
+rm -f "$HOME/bin/git_host_proxy.py"
 
-echo "== Installing the git-host-proxy LaunchAgent =="
+echo "== Installing the secrets-server LaunchAgent =="
 mkdir -p "$HOME/Library/LaunchAgents"
-render_template "$SCRIPT_DIR/com.user.githostproxy.template.plist" \
-  "$HOME/Library/LaunchAgents/com.user.githostproxy.plist" HOME
+render_template "$SCRIPT_DIR/com.user.secretsserver.template.plist" \
+  "$HOME/Library/LaunchAgents/com.user.secretsserver.plist" HOME
 uid="$(id -u)"
+# Bootout the pre-rename label too, in case it's still loaded from before
+# this change - otherwise it'd sit there running the now-orphaned copy of
+# git_host_proxy.py above forever.
 launchctl bootout "gui/$uid/com.user.githostproxy" 2>/dev/null || true
-launchctl bootstrap "gui/$uid" "$HOME/Library/LaunchAgents/com.user.githostproxy.plist"
+launchctl bootout "gui/$uid/com.user.secretsserver" 2>/dev/null || true
+launchctl bootstrap "gui/$uid" "$HOME/Library/LaunchAgents/com.user.secretsserver.plist"
+rm -f "$HOME/Library/LaunchAgents/com.user.githostproxy.plist"
 
 echo "== Generating an SSH key for host->VM access (if missing) =="
 # Plain ed25519, no hardware key: this is just for host-initiated

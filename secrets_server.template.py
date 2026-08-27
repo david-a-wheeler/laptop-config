@@ -1,0 +1,468 @@
+#!/usr/bin/env python3
+"""macOS Host Secrets Server.
+
+Listens on the virtual bridge interface, looks up a named secret in
+Keychain, and prompts for human approval before releasing it. Serves any
+secret host-secrets.sh has stored, not just a single GitHub PAT - the
+caller (vm-git-helper.py or any other VM-side script) names which secret it
+wants via "secret_name" in the request payload; vm-git-helper.py resolves
+that name from config.sh's GIT_SECRETS.
+
+Rendered from secrets_server.template.py by host-setup.sh - edit the
+template, not the installed copy, since a re-run of host-setup.sh
+overwrites this file.
+
+Only secrets stored under Keychain's "@@KEYCHAIN_PREFIX@@" prefix are ever
+served - see get_secret_from_keychain(). This is the entire access-control
+list: there's no separate allowlist to maintain, so adding a new servable
+secret is just "host-secrets.sh set <name>" on the host, nothing else. A
+request for a name that was never stored under the prefix looks exactly
+like "not found" - denied by construction, not by a check that could be
+forgotten.
+
+A secret can also be locked to one specific VM by storing it under
+"<name>@<vm-hostname>" (still under the KEYCHAIN_PREFIX) instead of the
+plain "<name>" - see resolve_vm_hostname() and get_secret_from_keychain().
+The VM's identity is resolved from the request's real network source IP
+cross-referenced against `utmctl ip-address`, the same source of truth
+host-setup.sh already uses for ~/.ssh/config - no separate credential is
+distributed to VMs to identify themselves.
+
+Logs one JSON object per line to stdout (see log_event) for every request
+this handles, approved/denied/errored - not just crashes. This exists
+because of a real incident: the process was alive and correctly bound (the
+actual cause turned out to be the VM's own egress firewall missing a rule
+for this port - see nftables.template.conf), but the LaunchAgent's log
+files sat empty the whole time regardless, which wasted real time
+diagnosing "is it even receiving requests." Now every request leaves a
+line, flushed immediately, whether or not anything goes wrong.
+
+To test connectivity or the approval dialog itself without ever touching
+the real secret, set "dry_run": true in a /secret request - see
+_handle_secret_dry_run. This exists because of a second incident on the
+same day: a raw curl test against a real request printed an actual token
+in plaintext. dry_run makes that a non-issue by construction, not by
+remembering to redact output - the server never reads the secret's value
+out of Keychain at all when dry_run is set, so there's nothing to expose
+regardless of how the response gets displayed.
+"""
+import json
+import re
+import socket
+import subprocess
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+LISTEN_PORT = @@SECRETS_SERVER_PORT@@
+KEYCHAIN_PREFIX = "@@KEYCHAIN_PREFIX@@"
+UTMCTL = "@@UTMCTL@@"
+
+
+def log_event(level: str, event: str, **fields) -> None:
+  """Writes one JSONL record to stdout and flushes immediately.
+
+  The LaunchAgent redirects stdout to secrets_server.log with no terminal
+  attached, and Python fully buffers stdout by default when it's not a
+  tty - lines can sit unwritten until the process exits. flush=True here
+  is what makes a log line show up right away instead. Never pass a field
+  containing the actual secret value - secret_name (which one was
+  requested) is fine to log, the secret itself is not.
+  """
+  record = {
+      "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+      "level": level,
+      "event": event,
+  }
+  record.update(fields)
+  print(json.dumps(record, sort_keys=True), flush=True)
+
+
+def get_virtual_bridge_ip() -> str:
+  """Scans macOS interfaces for UTM/Virtualization bridge adapters."""
+  try:
+    virtual_ifaces = [
+        name
+        for _, name in socket.if_nameindex()
+        if name.startswith(("bridge", "vmnet", "vnic"))
+    ]
+    for iface in virtual_ifaces:
+      out = subprocess.check_output(
+          ["ifconfig", iface], text=True, stderr=subprocess.DEVNULL
+      )
+      match = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)", out)
+      if match:
+        return match.group(1)
+  except Exception:
+    pass
+  return "127.0.0.1"
+
+
+def resolve_vm_hostname(source_ip: str) -> str:
+  """Maps a request's source IP to a running VM's name via utmctl - the
+  same source of truth host-setup.sh already uses to build ~/.ssh/config,
+  so there's no separate credential a VM needs to prove its own identity.
+  Returns "" if it can't be determined (utmctl missing/failed, or no
+  running VM's IP matches) - callers then only try the unlocked secret
+  name, exactly as if no VM-locked variant existed for this request.
+  Re-queries utmctl on every call rather than caching: VMs are few enough
+  that the cost is negligible, and a DHCP lease can change between requests.
+  """
+  try:
+    out = subprocess.check_output(
+        [UTMCTL, "list"], text=True, stderr=subprocess.DEVNULL
+    )
+  except Exception:
+    return ""
+  for line in out.splitlines()[1:]:
+    fields = line.split()
+    if len(fields) < 3 or fields[1] != "started":
+      continue
+    vm_name = fields[-1]
+    try:
+      ip_out = subprocess.check_output(
+          [UTMCTL, "ip-address", vm_name], text=True, stderr=subprocess.DEVNULL
+      )
+    except Exception:
+      continue
+    lines = ip_out.strip().splitlines()
+    if lines and lines[0].strip() == source_ip:
+      return vm_name
+  return ""
+
+
+def _keychain_read(service_name: str) -> str:
+  try:
+    return subprocess.check_output(
+        [
+            "security",
+            "find-generic-password",
+            "-s",
+            service_name,
+            "-w",
+        ],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    ).strip()
+  except subprocess.CalledProcessError:
+    return ""
+
+
+def _keychain_exists(service_name: str) -> bool:
+  return subprocess.run(
+      ["security", "find-generic-password", "-s", service_name],
+      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+  ).returncode == 0
+
+
+def get_secret_from_keychain(name: str, vm_hostname: str) -> str:
+  """Retrieves a named secret from Keychain, applying KEYCHAIN_PREFIX.
+
+  If vm_hostname is set, tries the VM-locked variant ("<prefix><name>@
+  <vm_hostname>") first, falling back to the unlocked "<prefix><name>" if
+  that's not found. This is the entire VM-locking mechanism: a secret
+  stored ONLY under its locked name is invisible to every other VM (a
+  request from elsewhere just doesn't find it, indistinguishable from "no
+  secret by that name"), while a secret stored only unlocked works for any
+  VM as before. Don't store both a locked and an unlocked copy of the same
+  name unless you actually want that fallback - see host-secrets.sh.
+  """
+  if vm_hostname:
+    locked = _keychain_read(f"{KEYCHAIN_PREFIX}{name}@{vm_hostname}")
+    if locked:
+      return locked
+  return _keychain_read(f"{KEYCHAIN_PREFIX}{name}")
+
+
+def keychain_secret_exists(name: str, vm_hostname: str) -> bool:
+  """Checks whether get_secret_from_keychain(name, vm_hostname) would find
+  something, without reading its value. Used for dry-run requests, so
+  testing connectivity or the approval flow can never actually pull a real
+  secret out of Keychain - there's nothing to accidentally print, because
+  nothing sensitive was ever read in the first place.
+  """
+  if vm_hostname and _keychain_exists(f"{KEYCHAIN_PREFIX}{name}@{vm_hostname}"):
+    return True
+  return _keychain_exists(f"{KEYCHAIN_PREFIX}{name}")
+
+
+def _applescript_escape(s: str) -> str:
+  """Escapes a string for safe embedding in an AppleScript string literal.
+
+  repo_path/commit_info come from the requesting VM (commit_info is derived
+  from a commit message, which is attacker-influenceable if you ever clone
+  something untrusted), so without this a crafted value could break out of
+  the quoted string and run arbitrary AppleScript via osascript.
+  """
+  return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+class SecretsRequestHandler(BaseHTTPRequestHandler):
+
+  def do_POST(self):
+    client_ip = self.client_address[0]
+    log_event("info", "request_received", path=self.path, client=client_ip)
+
+    if self.path != "/secret":
+      log_event("warning", "unknown_path", path=self.path, client=client_ip)
+      self.send_response(404)
+      self.end_headers()
+      return
+
+    content_length = int(self.headers.get("Content-Length", 0))
+    body = self.rfile.read(content_length)
+
+    try:
+      payload = json.loads(body.decode("utf-8"))
+    except Exception as e:
+      log_event(
+          "warning", "secret_denied", reason="invalid_json",
+          client=client_ip, detail=str(e),
+      )
+      self._respond({"status": "denied", "reason": "Invalid JSON"}, 400)
+      return
+
+    session_id = payload.get("session", "")
+    repo_path = payload.get("path", "Unknown Path")
+    commit_info = payload.get("commit", "No commit details")
+    secret_name = payload.get("secret_name", "")
+
+    if not session_id:
+      log_event(
+          "warning", "secret_denied", reason="missing_session",
+          client=client_ip, secret_name=secret_name,
+      )
+      self._respond(
+          {"status": "denied", "reason": "Missing GIT_AUTH_SESSION"}, 403
+      )
+      return
+
+    if not secret_name:
+      log_event(
+          "warning", "secret_denied", reason="missing_secret_name",
+          client=client_ip,
+      )
+      self._respond(
+          {"status": "denied", "reason": "Missing secret_name"}, 400
+      )
+      return
+
+    vm_hostname = resolve_vm_hostname(client_ip)
+
+    if "@" in secret_name:
+      # A well-behaved client (vm-git-helper.py) only ever sends a plain
+      # logical name - the "@vm-hostname" suffix that marks a locked
+      # Keychain entry (see get_secret_from_keychain) is a server-side
+      # detail, computed here from the request's own resolved source IP,
+      # never something a client supplies itself. Without this check, a
+      # client could send "somename@othervm" directly and the unlocked-
+      # fallback lookup in get_secret_from_keychain would treat that whole
+      # string as an opaque name and find it verbatim - silently defeating
+      # the entire locking mechanism. Always denied either way, but this
+      # gets its own alert dialog (not the normal approve/deny one) rather
+      # than looking like an ordinary "not found," since it's either a
+      # misconfigured client or a deliberate attempt to name another VM's
+      # locked secret directly, and a human should notice regardless of
+      # which it turns out to be.
+      log_event(
+          "warning", "secret_denied", reason="secret_name_contains_at",
+          client=client_ip, vm=vm_hostname or "unknown",
+          secret_name=secret_name,
+      )
+      self._show_alert_dialog(
+          f"Secrets Server: suspicious request denied\n\n"
+          f"From: {_applescript_escape(client_ip)} "
+          f"(resolved VM: {_applescript_escape(vm_hostname or 'unknown')})\n"
+          f"Requested secret name: {_applescript_escape(secret_name)}\n\n"
+          f"Secret names containing \"@\" are never sent by a normal "
+          f"client - this looks like a misconfigured script, or an "
+          f"attempt to request another VM's locked secret directly. "
+          f"This request has already been denied; no action needed "
+          f"unless you don't recognize it."
+      )
+      self._respond(
+          {"status": "denied", "reason": "Invalid secret_name"}, 400
+      )
+      return
+
+    dry_run = bool(payload.get("dry_run", False))
+    if dry_run:
+      self._handle_secret_dry_run(
+          client_ip, vm_hostname, secret_name, session_id, repo_path,
+          commit_info,
+      )
+      return
+
+    secret = get_secret_from_keychain(secret_name, vm_hostname)
+    if not secret:
+      log_event(
+          "error", "secret_error", reason="keychain_secret_not_found",
+          client=client_ip, vm=vm_hostname or "unknown", secret_name=secret_name,
+      )
+      self._respond(
+          {"status": "error", "reason": "Keychain secret not found"}, 500
+      )
+      return
+
+    prompt_text = (
+        f"Secrets Server Request\n\n"
+        f"Secret: {_applescript_escape(secret_name)}\n"
+        f"Requesting VM: {_applescript_escape(vm_hostname or 'unknown')}\n"
+        f"Target Path: {_applescript_escape(repo_path)}\n"
+        f"Local Context: {_applescript_escape(commit_info)}\n"
+        f"Session ID: {_applescript_escape(session_id[:8])}...\n\n"
+        f"Authorize access for this operation?"
+    )
+
+    log_event(
+        "info", "secret_prompt_shown", client=client_ip,
+        vm=vm_hostname or "unknown", secret_name=secret_name,
+        session=session_id[:8], path=repo_path,
+    )
+    approved = self._show_approval_dialog(prompt_text)
+
+    if approved:
+      log_event(
+          "info", "secret_approved", client=client_ip,
+          vm=vm_hostname or "unknown", secret_name=secret_name,
+          session=session_id[:8],
+      )
+      self._respond({"status": "approved", "token": secret}, 200)
+    else:
+      log_event(
+          "info", "secret_denied", reason="user_rejected", client=client_ip,
+          vm=vm_hostname or "unknown", secret_name=secret_name,
+          session=session_id[:8],
+      )
+      self._respond(
+          {"status": "denied", "reason": "User rejected request"}, 403
+      )
+
+  def _handle_secret_dry_run(self, client_ip, vm_hostname, secret_name,
+                              session_id, repo_path, commit_info):
+    """Exercises the full approval flow (Keychain lookup, dialog) without
+    ever reading the secret's actual value - see keychain_secret_exists().
+    The response has no "token" field either way, so there's nothing in it
+    that could ever put a real secret in a terminal or a log by accident.
+    This is the sanctioned way to test connectivity or the approval dialog:
+    always set "dry_run": true rather than curling /secret directly with a
+    real request - see the incident noted in git log around this file.
+    """
+    if not keychain_secret_exists(secret_name, vm_hostname):
+      log_event(
+          "error", "secret_error", reason="keychain_secret_not_found",
+          client=client_ip, vm=vm_hostname or "unknown",
+          secret_name=secret_name, dry_run=True,
+      )
+      self._respond(
+          {
+              "status": "error",
+              "reason": "Keychain secret not found",
+              "dry_run": True,
+          },
+          500,
+      )
+      return
+
+    prompt_text = (
+        f"TEST REQUEST - dry run, no secret will be released\n\n"
+        f"Secret: {_applescript_escape(secret_name)}\n"
+        f"Requesting VM: {_applescript_escape(vm_hostname or 'unknown')}\n"
+        f"Target Path: {_applescript_escape(repo_path)}\n"
+        f"Local Context: {_applescript_escape(commit_info)}\n"
+        f"Session ID: {_applescript_escape(session_id[:8])}...\n\n"
+        f"This only tests connectivity and this dialog - nothing is "
+        f"released either way."
+    )
+    log_event(
+        "info", "secret_dry_run_prompt_shown", client=client_ip,
+        vm=vm_hostname or "unknown", secret_name=secret_name,
+        session=session_id[:8], path=repo_path,
+    )
+    approved = self._show_approval_dialog(
+        prompt_text, title="Secrets Server Gatekeeper (TEST)"
+    )
+    log_event(
+        "info", "secret_dry_run_result", approved=approved, client=client_ip,
+        vm=vm_hostname or "unknown", secret_name=secret_name,
+        session=session_id[:8],
+    )
+    self._respond(
+        {"status": "approved" if approved else "denied", "dry_run": True},
+        200 if approved else 403,
+    )
+
+  def _show_approval_dialog(self, prompt_text: str,
+                             title: str = "Secrets Server Gatekeeper") -> bool:
+    """Shows the AppleScript approval dialog; returns whether Authorize was
+    clicked. Shared by the real and dry-run paths so there's exactly one
+    place that builds and runs the osascript command. Defaults to
+    Authorize (a bare Enter approves) rather than Deny - this dialog only
+    ever fires for a request carrying a live GIT_AUTH_SESSION, which
+    noclaude() strips before an AI agent ever gets near it (see
+    vm-bash-aliases-block.template.sh), so in practice it's gating routine
+    human operations, not an adversarial AI - a dialog you have to read
+    the button label on every single request is worse than the marginal
+    security value of "wrong button by default." Logs a warning if
+    osascript itself produced stderr output - that's how a dialog that
+    failed to display (as opposed to a real Deny click) shows up.
+    """
+    applescript = (
+        f'display dialog "{prompt_text}" with title'
+        f' "{_applescript_escape(title)}"'
+        ' buttons {"Deny", "Authorize"} default button "Authorize"'
+    )
+    res = subprocess.run(
+        ["osascript", "-e", applescript], capture_output=True, text=True
+    )
+    if res.stderr.strip():
+      log_event(
+          "warning", "approval_dialog_stderr",
+          detail=res.stderr.strip(),
+      )
+    return "button returned:Authorize" in res.stdout
+
+  def _show_alert_dialog(self, text: str) -> None:
+    """Shows an informational, single-button AppleScript alert - not an
+    approve/deny choice, since the caller has already decided to deny the
+    request regardless of what gets clicked here. Used only for requests
+    rejected as outright invalid/suspicious (see secret_name_contains_at)
+    rather than the normal "secret not found" or "user said no" paths, so
+    a human notices something odd happened instead of it passing as a
+    routine denial. Failures here (osascript missing, no GUI session) are
+    logged but never escalate - the request was already denied either way.
+    """
+    applescript = (
+        f'display dialog "{text}" with title "Secrets Server Alert" '
+        'buttons {"OK"} default button "OK"'
+    )
+    res = subprocess.run(
+        ["osascript", "-e", applescript], capture_output=True, text=True
+    )
+    if res.stderr.strip():
+      log_event("warning", "alert_dialog_stderr", detail=res.stderr.strip())
+
+  def _respond(self, data, code=200):
+    self.send_response(code)
+    self.send_header("Content-Type", "application/json")
+    self.end_headers()
+    self.wfile.write(json.dumps(data).encode("utf-8"))
+
+  def log_message(self, format, *args):
+    # Suppressed in favor of the explicit log_event calls above, which
+    # carry more useful structure than BaseHTTPRequestHandler's default
+    # access-log line.
+    pass
+
+
+def main():
+  listen_host = get_virtual_bridge_ip()
+  log_event("info", "startup", listen_host=listen_host, listen_port=LISTEN_PORT)
+  server = HTTPServer((listen_host, LISTEN_PORT), SecretsRequestHandler)
+  try:
+    server.serve_forever()
+  except KeyboardInterrupt:
+    log_event("info", "shutdown", reason="keyboard_interrupt")
+
+
+if __name__ == "__main__":
+  main()

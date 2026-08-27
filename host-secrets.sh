@@ -1,17 +1,33 @@
 #!/bin/sh
-# host-secrets.sh - manage the named secrets git_host_proxy.py serves out of
+# host-secrets.sh - manage the named secrets secrets_server.py serves out of
 # macOS Keychain. Run on the host only; VMs never store secrets. Kept
 # separate from host-setup.sh so a plain "git pull && ./host-setup.sh" can
 # never touch a stored secret. POSIX sh throughout - the token prompt below
 # masks input with stty rather than bash's "read -s", since we don't rely
 # on what /bin/sh actually is.
 #
+# Every name here is a short logical name - "github-pat", not
+# "laptop-config-github-pat". Every Keychain-touching command below applies
+# config.sh's KEYCHAIN_PREFIX itself; that prefix is what marks a secret as
+# servable by secrets_server.py at all (see config.sh), so storing
+# something here already makes it servable, nothing further to declare.
+#
+# To lock a secret to one specific VM instead of leaving it available to
+# any VM, just include "@<vm-hostname>" as part of the name you give below
+# (e.g. "heroku-api-key@mytux") - secrets_server.py resolves which VM is
+# asking and only serves an "@vm"-suffixed name to that VM specifically.
+# Don't store both "name" and "name@vm-hostname" at once unless you
+# actually want every other VM falling through to the unlocked one.
+#
 # Usage:
 #   host-secrets.sh list
-#   host-secrets.sh set    <name>   # interactive; prints instructions for
-#                                    # known names, asks before overwriting
-#   host-secrets.sh get    <name>   # prints the secret to stdout (careful)
-#   host-secrets.sh delete <name>   # asks for confirmation first
+#   host-secrets.sh set    <name>[@vm-hostname]   # interactive; prints
+#                                    # instructions for known names, asks
+#                                    # before overwriting
+#   host-secrets.sh get    <name>[@vm-hostname]   # prints the secret to
+#                                    # stdout (careful)
+#   host-secrets.sh delete <name>[@vm-hostname]   # asks for confirmation
+#                                    # first
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,18 +40,24 @@ macos_only "host-secrets.sh"
 usage() {
   cat <<EOF >&2
 Usage: $0 list
-       $0 set <name>
-       $0 get <name>
-       $0 delete <name>
+       $0 set <name>[@vm-hostname]
+       $0 get <name>[@vm-hostname]
+       $0 delete <name>[@vm-hostname]
 
-Named secrets currently referenced by config.sh's GIT_SECRETS:
+Named secrets currently referenced by config.sh's GIT_SECRETS (this list
+isn't exhaustive - it's just the git-specific ones; any name you've set,
+including "@vm-hostname"-locked ones, is servable once stored):
 $(for pair in $GIT_SECRETS; do echo "  ${pair#*:}  (for ${pair%%:*})"; done)
 EOF
   exit 1
 }
 
+# Every Keychain-touching function below takes a short logical name (the
+# same one you'd pass on the command line, "@vm-hostname" suffix and all)
+# and applies KEYCHAIN_PREFIX itself - callers never need to think about
+# the prefix.
 secret_exists() {
-  security find-generic-password -s "$1" >/dev/null 2>&1
+  security find-generic-password -s "${KEYCHAIN_PREFIX}$1" >/dev/null 2>&1
 }
 
 cmd_list() {
@@ -52,7 +74,7 @@ cmd_list() {
 }
 
 cmd_get() {
-  security find-generic-password -s "$1" -w
+  security find-generic-password -s "${KEYCHAIN_PREFIX}$1" -w
 }
 
 # Per-secret setup instructions. Add a case here as new named secrets show
@@ -88,7 +110,10 @@ cmd_set() {
     esac
   fi
 
-  print_recipe "$name"
+  # Strip any "@vm-hostname" lock suffix before looking up a recipe - the
+  # setup instructions for "heroku-api-key@mytux" are the same as for
+  # "heroku-api-key".
+  print_recipe "${name%%@*}"
   # Secrets this short are almost certainly a mistake (empty paste, partial
   # paste, a stray keystroke) rather than a real one - ask again instead of
   # silently storing something useless. The traps guarantee terminal echo
@@ -122,9 +147,9 @@ cmd_set() {
   echo "(Received ${#token} characters.)"
 
   if secret_exists "$name"; then
-    security delete-generic-password -s "$name" >/dev/null 2>&1
+    security delete-generic-password -s "${KEYCHAIN_PREFIX}${name}" >/dev/null 2>&1
   fi
-  security add-generic-password -a "$USER" -s "$name" -w "$token"
+  security add-generic-password -a "$USER" -s "${KEYCHAIN_PREFIX}${name}" -w "$token"
   echo "Stored $name in Keychain."
 }
 
@@ -138,7 +163,7 @@ cmd_delete() {
   read -r confirm
   case "$confirm" in
     y | Y | yes | YES)
-      security delete-generic-password -s "$name" >/dev/null 2>&1
+      security delete-generic-password -s "${KEYCHAIN_PREFIX}${name}" >/dev/null 2>&1
       echo "Deleted $name from Keychain."
       ;;
     *)

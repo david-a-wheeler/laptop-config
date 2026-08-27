@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Ubuntu VM Git Credential Helper.
 
-Dynamically finds the host default gateway and requests an ephemeral auth
-token from git_host_proxy.py running on the macOS host. Generalized: which
-Keychain secret to ask for is resolved from the git host git is asking about
-(GIT_SECRETS below, baked in from config.sh's GIT_SECRETS at install time by
-vm-setup.sh). A host with no entry here is refused without ever contacting
-the proxy, so only git hosts you've deliberately configured are handled.
+Dynamically finds the host default gateway and requests an ephemeral secret
+from secrets_server.py running on the macOS host. Which secret to ask for
+is resolved from the git host git is asking about (GIT_SECRETS below, baked
+in from config.sh's GIT_SECRETS at install time by vm-setup.sh) - the name
+sent is always the short, unprefixed logical name; secrets_server.py
+applies KEYCHAIN_PREFIX itself. A host with no entry here is refused
+without ever contacting the server, so only git hosts you've deliberately
+configured are handled.
 
 Rendered from vm-git-helper.template.py by vm-setup.sh - edit the template,
 not the installed copy, since a re-run of vm-setup.sh overwrites this file.
@@ -17,7 +19,7 @@ import subprocess
 import sys
 import urllib.request
 
-HOST_PROXY_PORT = @@HOST_PROXY_PORT@@
+SECRETS_SERVER_PORT = @@SECRETS_SERVER_PORT@@
 GIT_SECRETS = @@GIT_SECRETS_PY_DICT@@
 
 
@@ -47,7 +49,7 @@ def main():
   secret_name = GIT_SECRETS.get(host, "")
   if not secret_name:
     # No secret configured for this git host - fail closed without ever
-    # contacting the host proxy.
+    # contacting the secrets server.
     sys.exit(1)
 
   session_id = os.environ.get("GIT_AUTH_SESSION", "")
@@ -69,10 +71,10 @@ def main():
   }
 
   host_ip = get_default_gateway()
-  proxy_url = f"http://{host_ip}:{HOST_PROXY_PORT}/token"
+  server_url = f"http://{host_ip}:{SECRETS_SERVER_PORT}/secret"
 
   req = urllib.request.Request(
-      proxy_url,
+      server_url,
       data=json.dumps(payload).encode("utf-8"),
       headers={"Content-Type": "application/json"},
   )

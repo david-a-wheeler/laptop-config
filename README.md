@@ -26,8 +26,8 @@ A few pieces depend on each other, so the first pass needs this order:
 
 1. **On each VM**: `git pull && ./vm-setup.sh`. Installs `qemu-guest-agent`
    (step 2 needs it) and wires up the git credential helper - `git
-   push`/`fetch` won't actually succeed yet, since the host proxy has no
-   secret to give out until step 3.
+   push`/`fetch` won't actually succeed yet, since the secrets server has
+   no secret to give out until step 3.
 2. **On the host**: `./host-setup.sh`. Starts the git-auth proxy, generates
    the host's SSH key, builds `~/.ssh/config` from `utmctl` (now that
    qemu-guest-agent is running from step 1), and pushes the key straight to
@@ -40,7 +40,7 @@ A few pieces depend on each other, so the first pass needs this order:
 After that: `ssh lftux`/`scp x lftux:` works from the host, and a human
 shell's `git push`/`git fetch` on a VM triggers a macOS approval dialog and
 succeeds; the same command run via `noclaude` fails immediately instead
-(see architecture.md's Git Authentication Bridge section).
+(see architecture.md's Secrets Server section).
 
 Adding a new VM later: create it in UTM, then just repeat step 1 (on the
 new VM) and step 2 (on the host) - no `config.sh` edits, no commits needed,
@@ -57,7 +57,7 @@ re-run `./host-setup.sh` once the VM's actually reachable.
 ## Network egress is restricted
 
 VMs can only reach a handful of outbound ports by default: SSH (22),
-HTTP/HTTPS (80/443), DNS, and the host git-auth proxy - see `config.sh`'s
+HTTP/HTTPS (80/443), DNS, and the host secrets server - see `config.sh`'s
 `NFTABLES_ALLOWED_TCP_PORTS`. This is deliberate (see architecture.md's
 Security Controls Summary), not a bug - if something inside a VM can't
 reach the network and you're not sure why, this is the first thing to
@@ -75,13 +75,17 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   it): template rendering, idempotent block-insertion into dotfiles, git
   config niceties, and a "don't clobber a locally-edited file" install helper.
 - `host-setup.sh` - macOS host setup.
-- `git_host_proxy.py`, `com.user.githostproxy.template.plist` - the host-side
-  git-auth proxy (see architecture.md) and its LaunchAgent. Logs one JSONL
-  record per request (approved/denied/errored, never the secret itself) to
-  `/tmp/git_host_proxy.log`, flushed immediately - `tail -f` it while
-  diagnosing.
-- `host-secrets.sh` - add/rotate/delete the named secrets `git_host_proxy.py`
-  serves.
+- `secrets_server.template.py`, `com.user.secretsserver.template.plist` -
+  the host-side secrets server (see architecture.md) and its LaunchAgent.
+  Serves any secret `host-secrets.sh` has stored under Keychain's
+  `KEYCHAIN_PREFIX` (`laptop-config-` by default; see `config.sh`) - that
+  prefix is what marks a secret as servable at all, nothing else to
+  declare. Logs one JSONL record per request (approved/denied/errored,
+  never the secret itself) to `/tmp/secrets_server.log`, flushed
+  immediately - `tail -f` it while diagnosing.
+- `host-secrets.sh` - add/rotate/delete the named secrets `secrets_server.py`
+  serves. Include `@vm-hostname` in a name to lock that secret to one
+  specific VM instead of leaving it available to any of them.
 - `rotate-github-pat.sh` - creates a new GitHub PAT and stores it under
   `github-pat` in Keychain, without touching `config.sh` or the currently
   active secret - safe to run any time (GitHub PATs expire, so expect at
@@ -90,7 +94,7 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   new token's confirmed stored.
 - `vm-setup.sh` - Ubuntu VM setup.
 - `vm-git-helper.template.py` - the VM-side git credential helper that talks
-  to `git_host_proxy.py`.
+  to `secrets_server.py`.
 - `nftables.template.conf` - VM egress firewall ruleset.
 - `vm-bash-aliases-block.template.sh` - the managed block installed into each
   VM's `~/.bash_aliases` (editor, `GIT_AUTH_SESSION`, the `noclaude()`

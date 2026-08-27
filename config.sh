@@ -25,15 +25,25 @@ VM_USER="dwheeler"
 # to read the primary user's home directory. See architecture.md.
 MACOS_INFER_USER="_infer"
 
-# Port the host git-auth proxy (git_host_proxy.py) listens on, and that
-# vm-git-helper.py talks to.
-HOST_PROXY_PORT="9876"
+# Port the host secrets server (secrets_server.py) listens on, and that
+# vm-git-helper.py (and any other VM-side caller) talks to.
+SECRETS_SERVER_PORT="9876"
 
-# git host -> macOS Keychain service name, space-separated "host:service"
-# pairs. vm-git-helper.py (rendered from vm-git-helper.template.py) looks up
-# the right secret name here for whatever git host it's asked to authenticate.
-# Add an entry here (and run host-secrets.sh set <service> on the host) to
-# bring another git host under the proxy; no script changes needed.
+# Prefix every host-secrets.sh-managed Keychain entry is stored under. This
+# is what marks a secret as servable at all: secrets_server.py only ever
+# looks up prefixed names, so "not found" already means "not servable" -
+# there's no separate list of allowed secret names to maintain here. Locking
+# a secret to one VM is a further naming convention on top of this - see
+# host-secrets.sh and architecture.md's Secrets Server section.
+KEYCHAIN_PREFIX="laptop-config-"
+
+# git host -> logical secret name, space-separated "host:name" pairs.
+# vm-git-helper.py (rendered from vm-git-helper.template.py) looks up the
+# right secret name here for whatever git host it's asked to authenticate,
+# then asks secrets_server.py for it by that short name (KEYCHAIN_PREFIX is
+# applied host-side, never sent over the wire). Add an entry here (and run
+# host-secrets.sh set <name> on the host) to bring another git host under
+# the proxy; no script changes needed.
 GIT_SECRETS="github.com:github-pat"
 
 # Path to UTM's utmctl CLI, not on PATH by default since it ships inside
@@ -49,7 +59,7 @@ UTMCTL="/Applications/UTM.app/Contents/MacOS/utmctl"
 
 # TCP ports the VM is allowed to reach outbound to ANY destination
 # (besides loopback and DNS). 22=SSH, 80/443=HTTP/HTTPS. Don't add
-# HOST_PROXY_PORT here - it gets its own rule in nftables.template.conf,
+# SECRETS_SERVER_PORT here - it gets its own rule in nftables.template.conf,
 # scoped to just the host's gateway address, since that port only ever has
 # one legitimate destination and shouldn't be reachable anywhere else.
 NFTABLES_ALLOWED_TCP_PORTS="22 80 443"
