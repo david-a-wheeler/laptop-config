@@ -53,7 +53,7 @@ cmd_get() {
 # up in config.sh's GIT_SECRETS - this is the intended extension point.
 print_recipe() {
   case "$1" in
-    git-host-github-pat)
+    git-host-proxy-pat)
       cat <<EOF
 
 Create a GitHub Personal Access Token:

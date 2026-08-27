@@ -34,7 +34,7 @@ HOST_PROXY_PORT="9876"
 # the right secret name here for whatever git host it's asked to authenticate.
 # Add an entry here (and run host-secrets.sh set <service> on the host) to
 # bring another git host under the proxy; no script changes needed.
-GIT_SECRETS="github.com:git-host-github-pat"
+GIT_SECRETS="github.com:git-host-proxy-pat"
 
 # Path to UTM's utmctl CLI, not on PATH by default since it ships inside
 # the app bundle. host-setup.sh uses it to look up each running VM's name
@@ -47,8 +47,11 @@ GIT_SECRETS="github.com:git-host-github-pat"
 # qemu-guest-agent running in the VM (vm-setup.sh installs it).
 UTMCTL="/Applications/UTM.app/Contents/MacOS/utmctl"
 
-# TCP ports the VM is allowed to reach outbound (besides loopback and DNS).
-# 22=SSH, 80/443=HTTP/HTTPS. See nftables.template.conf.
+# TCP ports the VM is allowed to reach outbound to ANY destination
+# (besides loopback and DNS). 22=SSH, 80/443=HTTP/HTTPS. Don't add
+# HOST_PROXY_PORT here - it gets its own rule in nftables.template.conf,
+# scoped to just the host's gateway address, since that port only ever has
+# one legitimate destination and shouldn't be reachable anywhere else.
 NFTABLES_ALLOWED_TCP_PORTS="22 80 443"
 
 # Extra paths noclaude() grants read-only nono access to, beyond the

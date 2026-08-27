@@ -77,10 +77,22 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 
 echo "== Rendering and applying nftables egress ruleset =="
-nft_ports="$(printf '%s' "$NFTABLES_ALLOWED_TCP_PORTS" | sed 's/ /, /g')"
+# HOST_PROXY_PORT gets its own rule scoped to the host's gateway address
+# (see nftables.template.conf) rather than being folded into the general
+# NFTABLES_ALLOWED_TCP_PORTS set, which would let the VM reach ANY host on
+# that port instead of just the proxy. Missing this port entirely was a
+# real incident - the VM couldn't reach git_host_proxy.py at all, and
+# nothing failed loudly; git just fell back to an interactive username
+# prompt - so it's handled explicitly here rather than left to config.sh.
+nft_ports="$(printf '%s' "$NFTABLES_ALLOWED_TCP_PORTS" | sed 's/^ *//; s/ *$//; s/ /, /g')"
 NFTABLES_ALLOWED_TCP_PORTS_NFT="$nft_ports"
+HOST_GATEWAY_IP="$(ip route | awk '/^default/ { print $3; exit }')"
+if [ -z "$HOST_GATEWAY_IP" ]; then
+  echo "ERROR: couldn't determine the default gateway - can't scope the host-proxy firewall rule safely." >&2
+  exit 1
+fi
 render_template "$SCRIPT_DIR/nftables.template.conf" /tmp/nftables.conf.rendered \
-  NFTABLES_ALLOWED_TCP_PORTS_NFT
+  NFTABLES_ALLOWED_TCP_PORTS_NFT HOST_GATEWAY_IP HOST_PROXY_PORT
 sudo cp /tmp/nftables.conf.rendered /etc/nftables.conf
 rm -f /tmp/nftables.conf.rendered
 sudo nft -f /etc/nftables.conf

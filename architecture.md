@@ -63,6 +63,8 @@ The proxy is generalized to serve any named secret (see `config.sh`'s `GIT_SECRE
 
 Verification: from a human interactive shell, `git push`/`git fetch` should trigger a macOS dialog naming the repo path, commit, and session; from `noclaude`, the same operation should fail immediately with no dialog, since `GIT_AUTH_SESSION` is stripped.
 
+**Testing the proxy directly:** always set `"dry_run": true` in a `/token` request rather than sending a real one - the server never reads the secret's actual value out of Keychain in that case (see `keychain_secret_exists()`), so the response can never contain it, no matter how it's displayed. A real `/token` response legitimately contains the secret in plaintext (that's the whole point, for `vm-git-helper.py`'s benefit) - a raw `curl` against a real request once printed an actual token straight into a terminal.
+
 ## **4. Setup**
 
 Everything below "Overview" used to be a list of commands to copy-paste by hand into each VM and the host - which is exactly how it drifted out of sync with what was actually configured. That's now `config.sh` + `common.sh` + `host-setup.sh` + `host-secrets.sh` + `vm-setup.sh`, checked into this repo, idempotent, and safe to re-run after every `git pull`. See [README.md](README.md) for how to run them, and the scripts themselves (they're commented) for what each step does and why.

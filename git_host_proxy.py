@@ -13,12 +13,21 @@ name a caller may ask for.
 
 Logs one JSON object per line to stdout (see log_event) for every request
 this handles, approved/denied/errored - not just crashes. This exists
-because of a real incident: the process was alive and correctly bound, but
-something (still unclear - see git log) was refusing incoming connections,
-and the LaunchAgent's log files were sitting empty the whole time. Empty
-logs while diagnosing "is it even receiving requests" wasted real time;
-now every request leaves a line, flushed immediately, whether or not
-anything goes wrong.
+because of a real incident: the process was alive and correctly bound (the
+actual cause turned out to be the VM's own egress firewall missing a rule
+for this port - see nftables.template.conf), but the LaunchAgent's log
+files sat empty the whole time regardless, which wasted real time
+diagnosing "is it even receiving requests." Now every request leaves a
+line, flushed immediately, whether or not anything goes wrong.
+
+To test connectivity or the approval dialog itself without ever touching
+the real secret, set "dry_run": true in a /token request - see
+_handle_token_dry_run. This exists because of a second incident on the
+same day: a raw curl test against a real request printed an actual token
+in plaintext. dry_run makes that a non-issue by construction, not by
+remembering to redact output - the server never reads the secret's value
+out of Keychain at all when dry_run is set, so there's nothing to expose
+regardless of how the response gets displayed.
 """
 import json
 import re
@@ -87,6 +96,19 @@ def get_secret_from_keychain(service_name: str) -> str:
     return ""
 
 
+def keychain_secret_exists(service_name: str) -> bool:
+  """Checks whether a named secret exists in Keychain, without reading its
+  value (no "-w"). Used for dry-run requests, so testing connectivity or
+  the approval flow can never actually pull a real secret out of Keychain -
+  there's nothing to accidentally print, because nothing sensitive was ever
+  read in the first place.
+  """
+  return subprocess.run(
+      ["security", "find-generic-password", "-s", service_name],
+      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+  ).returncode == 0
+
+
 def _applescript_escape(s: str) -> str:
   """Escapes a string for safe embedding in an AppleScript string literal.
 
@@ -148,6 +170,13 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
       )
       return
 
+    dry_run = bool(payload.get("dry_run", False))
+    if dry_run:
+      self._handle_token_dry_run(
+          client_ip, secret_name, session_id, repo_path, commit_info
+      )
+      return
+
     secret = get_secret_from_keychain(secret_name)
     if not secret:
       log_event(
@@ -168,20 +197,13 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
         f"Authorize access for this operation?"
     )
 
-    applescript = (
-        f'display dialog "{prompt_text}" with title "Git Security Gatekeeper"'
-        ' buttons {"Deny", "Authorize"} default button "Deny"'
-    )
-
     log_event(
         "info", "token_prompt_shown", client=client_ip,
         secret_name=secret_name, session=session_id[:8], path=repo_path,
     )
-    res = subprocess.run(
-        ["osascript", "-e", applescript], capture_output=True, text=True
-    )
+    approved = self._show_approval_dialog(prompt_text)
 
-    if "button returned:Authorize" in res.stdout:
+    if approved:
       log_event(
           "info", "token_approved", client=client_ip,
           secret_name=secret_name, session=session_id[:8],
@@ -191,11 +213,83 @@ class AuthProxyHandler(BaseHTTPRequestHandler):
       log_event(
           "info", "token_denied", reason="user_rejected", client=client_ip,
           secret_name=secret_name, session=session_id[:8],
-          osascript_stderr=res.stderr.strip() or None,
       )
       self._respond(
           {"status": "denied", "reason": "User rejected request"}, 403
       )
+
+  def _handle_token_dry_run(self, client_ip, secret_name, session_id,
+                             repo_path, commit_info):
+    """Exercises the full approval flow (Keychain lookup, dialog) without
+    ever reading the secret's actual value - see keychain_secret_exists().
+    The response has no "token" field either way, so there's nothing in it
+    that could ever put a real secret in a terminal or a log by accident.
+    This is the sanctioned way to test connectivity or the approval dialog:
+    always set "dry_run": true rather than curling /token directly with a
+    real request - see the incident noted in git log around this file.
+    """
+    if not keychain_secret_exists(secret_name):
+      log_event(
+          "error", "token_error", reason="keychain_secret_not_found",
+          client=client_ip, secret_name=secret_name, dry_run=True,
+      )
+      self._respond(
+          {
+              "status": "error",
+              "reason": "Keychain secret not found",
+              "dry_run": True,
+          },
+          500,
+      )
+      return
+
+    prompt_text = (
+        f"TEST REQUEST - dry run, no secret will be released\n\n"
+        f"Secret: {_applescript_escape(secret_name)}\n"
+        f"Target Path: {_applescript_escape(repo_path)}\n"
+        f"Local Context: {_applescript_escape(commit_info)}\n"
+        f"Session ID: {_applescript_escape(session_id[:8])}...\n\n"
+        f"This only tests connectivity and this dialog - nothing is "
+        f"released either way."
+    )
+    log_event(
+        "info", "token_dry_run_prompt_shown", client=client_ip,
+        secret_name=secret_name, session=session_id[:8], path=repo_path,
+    )
+    approved = self._show_approval_dialog(
+        prompt_text, title="Git Security Gatekeeper (TEST)"
+    )
+    log_event(
+        "info", "token_dry_run_result", approved=approved, client=client_ip,
+        secret_name=secret_name, session=session_id[:8],
+    )
+    self._respond(
+        {"status": "approved" if approved else "denied", "dry_run": True},
+        200 if approved else 403,
+    )
+
+  def _show_approval_dialog(self, prompt_text: str,
+                             title: str = "Git Security Gatekeeper") -> bool:
+    """Shows the AppleScript approval dialog; returns whether Authorize was
+    clicked. Shared by the real and dry-run paths so there's exactly one
+    place that builds and runs the osascript command. Logs a warning if
+    osascript itself produced stderr output - that's how a dialog that
+    failed to display (as opposed to a real Deny click) shows up.
+    """
+    applescript = (
+        f'display dialog "{prompt_text}" with title'
+        f' "{_applescript_escape(title)}"'
+        ' buttons {"Deny", "Authorize"} default button "Deny"'
+    )
+    res = subprocess.run(
+        ["osascript", "-e", applescript], capture_output=True, text=True
+    )
+    if res.stderr.strip():
+      log_event(
+          "warning", "approval_dialog_stderr",
+          detail=res.stderr.strip(),
+      )
+    return "button returned:Authorize" in res.stdout
 
   def _respond(self, data, code=200):
     self.send_response(code)

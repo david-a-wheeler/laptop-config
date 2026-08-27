@@ -33,7 +33,7 @@ A few pieces depend on each other, so the first pass needs this order:
    qemu-guest-agent is running from step 1), and pushes the key straight to
    each VM with `ssh-copy-id` - it'll ask for that VM's login password once
    per VM; after that, key auth just works. No commit, no second VM pass.
-3. **On the host**: `./host-secrets.sh set git-host-github-pat`. Without
+3. **On the host**: `./host-secrets.sh set git-host-proxy-pat`. Without
    this, every `git push`/`fetch` from a VM gets denied (no secret in
    Keychain to release).
 
