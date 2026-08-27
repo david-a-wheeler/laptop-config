@@ -24,7 +24,7 @@ I'll run Ubuntu Linux Virtual Machines (VMs) that run AI harnesses contained by 
 | Network Egress | nftables ruleset | Restricts outbound traffic to ports 22, 53, 80, and 443 while permitting local loopback attacks. |
 | Print Isolation | CUPS bound to /run/cups/cups.sock | Permits human printing via D-Bus/libcups while nono blocks AI access to the socket file. |
 | Network Exposure | SSH Reverse Tunnel (RemoteForward) | Keeps inference ports bound to 127.0.0.1, avoiding LAN exposure. (Not yet built out - see `ENABLE_INFERENCE_SSH_TUNNEL` in config.sh.) |
-| VM Access | Host `~/.ssh/id_ed25519` (plain, no hardware key) in each VM's `authorized_keys`; `~/.ssh/config` built from live `utmctl` queries | One-directional human convenience login (`ssh`/`scp` a VM by name); VMs never get host access. Adding a VM needs no host-side config - `host-setup.sh` re-queries UTM every run. |
+| VM Access | Host `~/.ssh/id_ed25519` (plain, no hardware key), pushed to each VM's `authorized_keys` via `ssh-copy-id`; `~/.ssh/config` built from live `utmctl` queries | One-directional human convenience login (`ssh`/`scp` a VM by name); VMs never get host access. Adding a VM needs no host-side config, no commit - `host-setup.sh` re-queries UTM and re-pushes the key every run. |
 
 ## **3. Git Authentication Bridge**
 

@@ -139,18 +139,6 @@ render_template "$SCRIPT_DIR/vm-bash-aliases-block.template.sh" /tmp/bash-aliase
 install_managed_block /tmp/bash-aliases-block.rendered "$HOME/.bash_aliases"
 rm -f /tmp/bash-aliases-block.rendered
 
-echo "== Adding the host's SSH public key to authorized_keys =="
-mkdir -p "$HOME/.ssh"
-chmod 700 "$HOME/.ssh"
-touch "$HOME/.ssh/authorized_keys"
-chmod 600 "$HOME/.ssh/authorized_keys"
-if [ -f "$SCRIPT_DIR/host-ssh-key.pub" ]; then
-  pubkey="$(cat "$SCRIPT_DIR/host-ssh-key.pub")"
-  grep -qxF "$pubkey" "$HOME/.ssh/authorized_keys" || echo "$pubkey" >> "$HOME/.ssh/authorized_keys"
-else
-  echo "NOTE: host-ssh-key.pub isn't in the repo yet - run host-setup.sh on the Mac, commit it, and git pull here to enable host->VM ssh." >&2
-fi
-
 if [ "$ENABLE_INFERENCE_SSH_TUNNEL" = "true" ]; then
   # Reserved for the "MAYBE" host-inference-engine SSH reverse tunnel from
   # architecture.md. The VM side needs nothing beyond sshd (already enabled

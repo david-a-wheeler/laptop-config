@@ -59,18 +59,19 @@ echo "== Generating an SSH key for host->VM access (if missing) =="
 # Plain ed25519, no hardware key: this is just for host-initiated
 # convenience logins (ssh/scp into a VM by name), not for anything
 # security-critical - VMs never get host secrets this way. The private key
-# never leaves the host; the public half gets copied into the repo below so
-# vm-setup.sh can install it on each VM's authorized_keys. Public keys
-# aren't secret, so it's fine to commit host-ssh-key.pub.
+# never leaves the host. The public half is pushed straight to each VM
+# below via ssh-copy-id, rather than committed into this repo: a public key
+# isn't a secret, but it *is* machine-generated, person-specific data, so
+# tracking it here would mean anyone else reusing this repo either inherits
+# this key or fights constant diff noise replacing it with their own -
+# same category of problem config.local.sh already solves for config.sh.
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
   ssh-keygen -t ed25519 -N "" -f "$HOME/.ssh/id_ed25519" -C "laptop-config host->VM access"
 fi
-cp "$HOME/.ssh/id_ed25519.pub" "$SCRIPT_DIR/host-ssh-key.pub"
-echo "NOTE: if host-ssh-key.pub is new or changed, commit it so vm-setup.sh can install it on each VM."
 
-echo "== Configuring SSH access to VMs (~/.ssh/config, via utmctl) =="
+echo "== Configuring SSH access to VMs (~/.ssh/config + authorized_keys, via utmctl) =="
 # Ask utmctl (UTM's own CLI, already installed with the app) which VMs are
 # running and what IP each one currently has, rather than maintaining a
 # manual name->IP list: nothing to update here as VMs are added, removed,
@@ -79,6 +80,15 @@ echo "== Configuring SSH access to VMs (~/.ssh/config, via utmctl) =="
 # since a stopped one has no guest agent to answer `ip-address` anyway.
 # `ip-address` lists IPv4 addresses before any IPv6 ones, so the first line
 # is what we want (see `utmctl help ip-address`).
+#
+# ssh-copy-id installs the key from above on each VM using its normal login
+# password (typed interactively) - standard, boring, and it needs nothing
+# from this repo or from vm-setup.sh. It's also already idempotent: once a
+# VM has the key, ssh-copy-id authenticates with it directly and skips
+# re-adding it, no password needed on later runs. accept-new avoids an
+# unexpected host-key prompt on a VM's first-ever connection; a rejected or
+# unreachable VM only warns, so one bad VM can't stop the others or the
+# rest of this script.
 if [ -x "$UTMCTL" ]; then
   # Capture "utmctl list"'s own exit status separately before piping its
   # output onward - a pipeline's exit status in POSIX sh is the *last*
@@ -100,6 +110,10 @@ if [ -x "$UTMCTL" ]; then
               echo "    IdentitiesOnly yes"
               echo
             } >> "$ssh_config_block"
+            if ! ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" \
+                 -o StrictHostKeyChecking=accept-new "$VM_USER@$vm_ip"; then
+              echo "WARNING: couldn't copy the host's SSH key to $vm_name ($vm_ip) - 'ssh $vm_name' will need a password until this succeeds." >&2
+            fi
           fi
         done
     install_managed_block "$ssh_config_block" "$HOME/.ssh/config"
