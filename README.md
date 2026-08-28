@@ -42,8 +42,8 @@ shell's `git push`/`git fetch` on a VM triggers a macOS approval dialog and
 succeeds; the same command run via `noclaude` fails immediately instead
 (see architecture.md's Secrets Server section).
 
-Want Heroku access from a VM too? `./rotate-heroku-key.sh` (or
-`./rotate-heroku-key.sh <vm-hostname>` to lock it to one VM), then
+Want Heroku access from a VM too? `./rotate-heroku-key.sh` (set
+`config.sh`'s `HEROKU_API_KEY_VM` first to lock it to one VM), then
 `heroku_session` on the VM - see architecture.md's Secrets Server section.
 Optional, and independent of the git setup above.
 
@@ -98,8 +98,8 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   the script's own printed output for how to actually cut over once the
   new token's confirmed stored.
 - `rotate-heroku-key.sh` - same idea as `rotate-github-pat.sh`, for
-  `heroku-api-key` - pass a VM hostname (e.g. `rotate-heroku-key.sh mytux`)
-  to store it locked to one VM instead of available to any of them.
+  `heroku-api-key` - set `config.sh`'s `HEROKU_API_KEY_VM` to store it
+  locked to one VM instead of available to any of them.
 - `vm-setup.sh` - Ubuntu VM setup.
 - `vm-git-helper.template.py` - the VM-side git credential helper that talks
   to `secrets_server.py`.

@@ -46,6 +46,12 @@ KEYCHAIN_PREFIX="laptop-config-"
 # the proxy; no script changes needed.
 GIT_SECRETS="github.com:github-pat"
 
+# VM to lock the Heroku API key to (rotate-heroku-key.sh reads this) - set
+# to a VM hostname (e.g. "lftux") to restrict heroku_session on other VMs
+# to a denial, or leave empty for a key any VM can use. See
+# architecture.md's Secrets Server section for how VM-locking works.
+HEROKU_API_KEY_VM="lftux"
+
 # Path to UTM's utmctl CLI, not on PATH by default since it ships inside
 # the app bundle. host-setup.sh uses it to look up each running VM's name
 # and current IP live (`utmctl list`, `utmctl ip-address <name>`) and

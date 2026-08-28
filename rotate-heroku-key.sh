@@ -1,11 +1,12 @@
 #!/bin/sh
 # rotate-heroku-key.sh - creates a new Heroku API token and stores it in
 # Keychain under "heroku-api-key" (or "heroku-api-key@<vm-hostname>" if
-# you pass one, to lock it to a single VM - see architecture.md's Secrets
-# Server section). Never touches config.sh or any other secret - same
-# "rotate first, cut over later" shape as rotate-github-pat.sh.
+# config.sh's HEROKU_API_KEY_VM is set, to lock it to a single VM - see
+# architecture.md's Secrets Server section). Never touches any other
+# secret - same "rotate first, cut over later" shape as
+# rotate-github-pat.sh.
 #
-# Usage: rotate-heroku-key.sh [vm-hostname]
+# Usage: rotate-heroku-key.sh
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -17,9 +18,9 @@ macos_only "rotate-heroku-key.sh"
 
 name="heroku-api-key"
 description="laptop-config"
-if [ $# -ge 1 ]; then
-  name="heroku-api-key@$1"
-  description="laptop-config: $1"
+if [ -n "$HEROKU_API_KEY_VM" ]; then
+  name="heroku-api-key@$HEROKU_API_KEY_VM"
+  description="laptop-config: $HEROKU_API_KEY_VM"
 fi
 
 echo "== Rotating the Heroku API key =="
@@ -50,8 +51,8 @@ echo
 "$SCRIPT_DIR/host-secrets.sh" set "$name"
 
 echo
-if [ $# -ge 1 ]; then
-  echo "Try it: on $1 (only - this key is locked to that VM), run"
+if [ -n "$HEROKU_API_KEY_VM" ]; then
+  echo "Try it: on $HEROKU_API_KEY_VM (only - this key is locked to that VM), run"
 else
   echo "Try it: on any VM, run"
 fi
