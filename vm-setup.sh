@@ -33,21 +33,23 @@ echo "== Installing base packages =="
 # tools worth having on every VM regardless of project (vim in particular
 # because EDITOR/VISUAL below are set to it; python3 because
 # vm-git-helper.py above is a Python script invoked directly by git, so
-# it's a hard requirement for the git-auth bridge, not just a nicety - not
-# worth assuming it's preinstalled). Checked against `apt-mark showmanual`
-# on lftux and deliberately left out anything project-specific rather than
-# universal - ruby, postgresql, and the heroku CLI are for one project
-# (BadgeApp) and don't belong in a generic laptop-config repo; cmake,
-# autoconf, bison, pkg-config, and the lib*-dev packages are ruby-build's
-# prerequisites for compiling Ruby, same story; graphviz looked like it
-# might be a project's doc-generation dependency rather than a general
-# tool. Add project-specific packages by hand in that project's own setup,
-# not here. "apt-get install -y" is naturally idempotent (a no-op once
-# everything's already at the latest version), so this one line covers
-# first install and every later re-run.
+# it's a hard requirement for the git-auth bridge, not just a nicety; it's
+# not worth assuming it's preinstalled). jq is here for the same reason:
+# rotate-heroku-key.sh's revoke-the-old-authorization step filters
+# "heroku authorizations -j" through it. Checked against `apt-mark
+# showmanual` on lftux and deliberately left out anything project-specific
+# rather than universal: ruby, postgresql, and the heroku CLI are for one
+# project (BadgeApp) and don't belong in a generic laptop-config repo;
+# cmake, autoconf, bison, pkg-config, and the lib*-dev packages are
+# ruby-build's prerequisites for compiling Ruby, same story; graphviz
+# looked like it might be a project's doc-generation dependency rather
+# than a general tool. Add project-specific packages by hand in that
+# project's own setup, not here. "apt-get install -y" is naturally
+# idempotent (a no-op once everything's already at the latest version), so
+# this one line covers first install and every later re-run.
 sudo apt-get update
 sudo apt-get install -y openssh-server avahi-daemon nftables curl cups \
-  qemu-guest-agent git shellcheck make build-essential vim python3
+  qemu-guest-agent git shellcheck make build-essential vim python3 jq
 
 echo "== Enabling services =="
 sudo systemctl enable --now ssh avahi-daemon nftables cups qemu-guest-agent
