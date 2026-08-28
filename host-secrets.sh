@@ -46,10 +46,7 @@ Usage: $0 list
        $0 get <name>[@vm-hostname]
        $0 delete <name>[@vm-hostname]
 
-Named secrets currently referenced by config.sh's GIT_SECRETS (this list
-isn't exhaustive - it's just the git-specific ones; any name you've set,
-including "@vm-hostname"-locked ones, is servable once stored):
-$(for pair in $GIT_SECRETS; do echo "  ${pair#*:}  (for ${pair%%:*})"; done)
+Run "$0 list" to see every currently servable secret.
 EOF
   exit 1
 }
@@ -63,6 +60,7 @@ secret_exists() {
 }
 
 cmd_list() {
+  echo "Named secrets referenced by config.sh's GIT_SECRETS:"
   for pair in $GIT_SECRETS; do
     host="${pair%%:*}"
     name="${pair#*:}"
@@ -71,8 +69,30 @@ cmd_list() {
     else
       state="MISSING"
     fi
-    echo "$name (for $host): $state"
+    echo "  $name (for $host): $state"
   done
+
+  echo
+  echo "All secrets currently servable (stored under Keychain's \"${KEYCHAIN_PREFIX}\" prefix):"
+  # "security dump-keychain" (no "-d") lists item attributes only, never
+  # secret values: the closest thing security(1) has to "list by prefix",
+  # since find-generic-password only does an exact -s match. "svce" is
+  # Keychain's own attribute name for the service string
+  # add-generic-password -s/find-generic-password -s operate on. Capture
+  # the output separately (rather than piping it directly) so a failure
+  # here is visible instead of silently producing an empty list under
+  # set -e (same reasoning as host-setup.sh's utm_list_output).
+  dump_output="$(security dump-keychain 2>&1)" || {
+    echo "  WARNING: 'security dump-keychain' failed; can't list these:" >&2
+    echo "$dump_output" >&2
+    dump_output=""
+  }
+  printf '%s\n' "$dump_output" \
+    | grep -o '"svce"<blob>="[^"]*"' \
+    | sed -e 's/^"svce"<blob>="//' -e 's/"$//' \
+    | grep "^${KEYCHAIN_PREFIX}" \
+    | sed -e "s/^${KEYCHAIN_PREFIX}//" -e 's/^/  - /' \
+    | sort -u
 }
 
 cmd_get() {
