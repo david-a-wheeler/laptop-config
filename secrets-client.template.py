@@ -5,7 +5,7 @@ Fetches one named secret from secrets_server.py on the macOS host, over
 the same request/response protocol vm-git-helper.py already speaks - minus
 git's credential-helper-specific stdin/stdout format - as a reusable
 primitive for any VM-side script that needs a host-held secret released
-with human approval, not just git. run_heroku() (see
+with human approval, not just git. heroku_session() (see
 vm-bash-aliases-block.template.sh) is the first non-git caller.
 
 Usage: secrets-client.py get <name> [--context TEXT]

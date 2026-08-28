@@ -44,7 +44,7 @@ succeeds; the same command run via `noclaude` fails immediately instead
 
 Want Heroku access from a VM too? `./host-secrets.sh set heroku-api-key`
 (see the script's printed instructions, or `rotate-heroku-key.sh`), then
-`run_heroku` on the VM - see architecture.md's Secrets Server section.
+`heroku_session` on the VM - see architecture.md's Secrets Server section.
 Optional, and independent of the git setup above.
 
 Adding a new VM later: create it in UTM, then just repeat step 1 (on the
@@ -106,11 +106,11 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
 - `secrets-client.template.py` - generic VM-side CLI for fetching any named
   secret from `secrets_server.py` (`secrets-client.py get <name>`) - the
   same protocol `vm-git-helper.py` speaks, without git's credential-helper
-  format. `run_heroku` (below) is the first non-git caller.
+  format. `heroku_session` (below) is the first non-git caller.
 - `nftables.template.conf` - VM egress firewall ruleset.
 - `vm-bash-aliases-block.template.sh` - the managed block installed into each
   VM's `~/.bash_aliases`: editor, `LAPTOP_CONFIG_AUTH_SESSION`, the
-  `noclaude()` sandboxed-agent wrapper, and `run_heroku` (fetches
+  `noclaude()` sandboxed-agent wrapper, and `heroku_session` (fetches
   `heroku-api-key` once and runs a command - or an interactive shell if none
   given - as a child process with `HEROKU_API_KEY` set only there, so a
   burst of `heroku` commands needs one approval click instead of one per

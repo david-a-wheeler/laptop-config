@@ -41,7 +41,7 @@ echo
 
 echo
 echo "Stored as \"$name\". This doesn't touch any other secret - if this"
-echo "replaces an existing key of the same name, run_heroku on the VM picks"
+echo "replaces an existing key of the same name, heroku_session on the VM picks"
 echo "up the new one immediately (it fetches fresh every time)."
 echo
 if [ $# -ge 1 ]; then
@@ -50,9 +50,9 @@ else
   echo "Try it: on any VM, run"
 fi
 echo
-echo "  run_heroku heroku auth:whoami"
+echo "  heroku_session heroku auth:whoami"
 echo
 echo "That fetches the key (one approval dialog here on the host), runs"
 echo "\"heroku auth:whoami\" with it set, and it's gone again once that"
-echo "command exits. Run \"run_heroku\" with no arguments instead to drop"
+echo "command exits. Run \"heroku_session\" with no arguments instead to drop"
 echo "into a shell for a whole burst of heroku commands at once."
