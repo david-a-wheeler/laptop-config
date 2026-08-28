@@ -14,10 +14,16 @@ prose, code comments, commit messages, PR descriptions, and docs:
 - Contract maximally ("don't", "it's", "we're") to avoid a bureaucratic tone.
 - No marketing language, hype, or exaggeration.
 - No flattery. Try to focus on facts.
-- Avoid sounding like AI-generated text. Never use em dashes; use parentheses,
-  semicolons, or restructured sentences instead.
-- Avoid AI-giveaway phrases: "dive into", "unleash", "game-changing",
-  "load-bearing", etc.
+- Always avoid sounding like AI-generated text.
+  * Never use em dashes, and never use a plain hyphen nor a double-hyphen
+    as a stand-in for one either: watch for any " - " (space, hyphen,
+    space) or "--" doing an em dash's job of joining or breaking a clause.
+    Instead, use a colon, a semicolon, parentheses, two separate sentences,
+    or other constructs. Ordinary hyphenation is still fine (such as
+    for compound words and ranges), and "--" is fine for introducing
+    long option names.
+  * Avoid AI-giveaway phrases: "dive into", "unleash", "game-changing",
+    "load-bearing", etc.
 - Use logical quotation (punctuation outside quotes unless part of the quoted
   material) and the Oxford comma.
 - No corporate jargon.
@@ -36,7 +42,7 @@ You are running in an Ubuntu Linux VM running on top of a MacOS host via UTM.
 ## Working arrangement
 
 * I'll routinely switch git branches and edit files without always telling you.
-* Proposed Changes should generally be on a branch unless we're
+* Proposed changes should generally be on a branch unless we're
   early in development.
 * Temporary files destinated for deletion can be stored in the current directory but I generally prefer them prefixed with `,` to make that clear.
 
