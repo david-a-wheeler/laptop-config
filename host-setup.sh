@@ -1,16 +1,16 @@
 #!/bin/sh
-# host-setup.sh - idempotent setup for the macOS host. POSIX sh throughout
-# (no bash-only features), same as vm-setup.sh - what /bin/sh actually is
+# host-setup.sh: idempotent setup for the macOS host. POSIX sh throughout
+# (no bash-only features), same as vm-setup.sh: what /bin/sh actually is
 # on macOS isn't worth relying on either way.
 #
 # Run this after every "git pull" of this repo to converge the host to the
 # repo's current config. Safe to re-run any time. Some steps have no
-# reliable non-interactive equivalent (GUI-only System Settings toggles) -
+# reliable non-interactive equivalent (GUI-only System Settings toggles);
 # those print exact instructions and wait for you to confirm, rather than
 # guessing at a scriptable equivalent that might silently do the wrong
 # thing (e.g. create an admin account, or toggle the wrong power setting).
 #
-# Does not touch secrets - see host-secrets.sh for that (run it once after
+# Does not touch secrets; see host-secrets.sh for that (run it once after
 # the first host-setup.sh, and again whenever a token needs rotating).
 set -eu
 
@@ -18,25 +18,25 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/config.sh"
 . "$SCRIPT_DIR/common.sh"
 
-# This script is macOS-only for now - real incident: this got run on an
+# This script is macOS-only for now. Real incident: this got run on an
 # Ubuntu VM by mistake, and its Mac-specific checks further down produced
-# misleading results (no /Users, no _infer account - neither of which
+# misleading results (no /Users, no _infer account, neither of which
 # means anything on Linux) instead of just saying "wrong machine." Might
 # loosen this later (e.g. a Linux host), but that's not supported today.
 macos_only "host-setup.sh"
 
 # Disabled: the check below was added after "ls /Users" failed with
-# ENOENT, which looked like a Full Disk Access problem - but that test was
+# ENOENT, which looked like a Full Disk Access problem, but that test was
 # run over an ssh session into the Linux VM, which has no /Users at all
 # (it has /home); nothing was actually confirmed broken on macOS itself.
 # Left here commented out, not deleted, in case FDA does turn out to be a
-# real precondition later - uncomment and verify against an actual Mac
+# real precondition later; uncomment and verify against an actual Mac
 # shell first.
 #
 # echo "== Checking for Full Disk Access =="
 # if ! ls /Users >/dev/null 2>&1; then
 #   cat <<EOF >&2
-# ERROR: can't read /Users - this terminal app doesn't have Full Disk
+# ERROR: can't read /Users: this terminal app doesn't have Full Disk
 # Access, which recent macOS requires for account/directory lookups (id,
 # dscl) that later steps in this script depend on.
 #
@@ -67,7 +67,7 @@ EOF
   printf '%s' "Press Enter once you've created it (or Ctrl-C to skip for now): "
   read -r _
   if ! id "$MACOS_INFER_USER" >/dev/null 2>&1; then
-    echo "WARNING: $MACOS_INFER_USER still not found. Continuing anyway - re-run this script after creating it." >&2
+    echo "WARNING: $MACOS_INFER_USER still not found. Continuing anyway; re-run this script after creating it." >&2
   fi
 fi
 
@@ -76,7 +76,7 @@ mkdir -p "$HOME/bin"
 render_template "$SCRIPT_DIR/secrets_server.template.py" "$HOME/bin/secrets_server.py" \
   SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL
 chmod +x "$HOME/bin/secrets_server.py"
-# Cleanup from the pre-rename layout (git_host_proxy.py) - harmless if
+# Cleanup from the pre-rename layout (git_host_proxy.py); harmless if
 # these were never present.
 rm -f "$HOME/bin/git_host_proxy.py"
 
@@ -86,7 +86,7 @@ render_template "$SCRIPT_DIR/com.user.secretsserver.template.plist" \
   "$HOME/Library/LaunchAgents/com.user.secretsserver.plist" HOME
 uid="$(id -u)"
 # Bootout the pre-rename label too, in case it's still loaded from before
-# this change - otherwise it'd sit there running the now-orphaned copy of
+# this change; otherwise it'd sit there running the now-orphaned copy of
 # git_host_proxy.py above forever.
 launchctl bootout "gui/$uid/com.user.githostproxy" 2>/dev/null || true
 launchctl bootout "gui/$uid/com.user.secretsserver" 2>/dev/null || true
@@ -96,12 +96,12 @@ rm -f "$HOME/Library/LaunchAgents/com.user.githostproxy.plist"
 echo "== Generating an SSH key for host->VM access (if missing) =="
 # Plain ed25519, no hardware key: this is just for host-initiated
 # convenience logins (ssh/scp into a VM by name), not for anything
-# security-critical - VMs never get host secrets this way. The private key
+# security-critical; VMs never get host secrets this way. The private key
 # never leaves the host. The public half is pushed straight to each VM
 # below via ssh-copy-id, rather than committed into this repo: a public key
 # isn't a secret, but it *is* machine-generated, person-specific data, so
 # tracking it here would mean anyone else reusing this repo either inherits
-# this key or fights constant diff noise replacing it with their own -
+# this key or fights constant diff noise replacing it with their own,
 # same category of problem config.local.sh already solves for config.sh.
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
@@ -120,7 +120,7 @@ echo "== Configuring SSH access to VMs (~/.ssh/config + authorized_keys, via utm
 # is what we want (see `utmctl help ip-address`).
 #
 # ssh-copy-id installs the key from above on each VM using its normal login
-# password (typed interactively) - standard, boring, and it needs nothing
+# password (typed interactively): standard, boring, and it needs nothing
 # from this repo or from vm-setup.sh. It's also already idempotent: once a
 # VM has the key, ssh-copy-id authenticates with it directly and skips
 # re-adding it, no password needed on later runs. accept-new avoids an
@@ -129,7 +129,7 @@ echo "== Configuring SSH access to VMs (~/.ssh/config + authorized_keys, via utm
 # rest of this script.
 if [ -x "$UTMCTL" ]; then
   # Capture "utmctl list"'s own exit status separately before piping its
-  # output onward - a pipeline's exit status in POSIX sh is the *last*
+  # output onward: a pipeline's exit status in POSIX sh is the *last*
   # command's (no "pipefail" here), so "utmctl list | awk | while" would
   # otherwise silently swallow a failure here (UTM not running, etc.)
   # instead of warning about it.
@@ -150,7 +150,7 @@ if [ -x "$UTMCTL" ]; then
             } >> "$ssh_config_block"
             if ! ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" \
                  -o StrictHostKeyChecking=accept-new "$VM_USER@$vm_ip"; then
-              echo "WARNING: couldn't copy the host's SSH key to $vm_name ($vm_ip) - 'ssh $vm_name' will need a password until this succeeds." >&2
+              echo "WARNING: couldn't copy the host's SSH key to $vm_name ($vm_ip); 'ssh $vm_name' will need a password until this succeeds." >&2
             fi
           fi
         done
@@ -158,11 +158,11 @@ if [ -x "$UTMCTL" ]; then
     chmod 600 "$HOME/.ssh/config"
     rm -f "$ssh_config_block"
   else
-    echo "WARNING: 'utmctl list' failed - skipping ~/.ssh/config setup:" >&2
+    echo "WARNING: 'utmctl list' failed; skipping ~/.ssh/config setup:" >&2
     echo "$utm_list_output" >&2
   fi
 else
-  echo "WARNING: utmctl not found at $UTMCTL - skipping ~/.ssh/config setup. Check UTMCTL in config.sh." >&2
+  echo "WARNING: utmctl not found at $UTMCTL; skipping ~/.ssh/config setup. Check UTMCTL in config.sh." >&2
 fi
 
 if ! confirmation_done battery; then

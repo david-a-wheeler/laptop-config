@@ -1,12 +1,12 @@
 #!/bin/sh
-# vm-setup.sh - idempotent setup for an Ubuntu VM (lftux, mytux, ...).
+# vm-setup.sh: idempotent setup for an Ubuntu VM (lftux, mytux, ...).
 #
 # Run this after every "git pull" of this repo to converge the VM to the
 # repo's current config. Safe to re-run any time; it only ever brings state
 # in line with config.sh, never accumulates changes.
 #
 # Needs sudo (apt, systemctl, writing /etc/nftables.conf, /etc/cups/cupsd.conf,
-# /usr/local/bin). Does not touch secrets - see host-secrets.sh, run on the
+# /usr/local/bin). Does not touch secrets; see host-secrets.sh, run on the
 # macOS host, for that.
 set -eu
 
@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/config.sh"
 . "$SCRIPT_DIR/common.sh"
 
-# This script is Linux-only for now - might loosen this later, but only
+# This script is Linux-only for now (might loosen this later), but only
 # Ubuntu VMs are supported today, so fail clearly rather than let
 # apt/systemctl/etc. produce confusing errors on a machine without them.
 linux_only "vm-setup.sh"
@@ -22,11 +22,11 @@ linux_only "vm-setup.sh"
 echo "== Installing base packages =="
 # openssh/avahi/cups/nftables per architecture.md's discovery+services
 # phase. curl has to land here, before anything else (the gh repo setup
-# right below, the Claude Code installer further down) tries to use it -
-# a fresh VM image can't be assumed to have it already. Node.js/npm are
+# right below, the Claude Code installer further down) tries to use it,
+# and a fresh VM image can't be assumed to have it already. Node.js/npm are
 # deliberately NOT installed here: Claude Code's native installer (below)
 # is self-contained. qemu-guest-agent lets the host ask UTM's utmctl for
-# this VM's current IP (see host-setup.sh) - without it running here,
+# this VM's current IP (see host-setup.sh); without it running here,
 # "ssh <this-vm-name>" from the host has nothing to go on.
 #
 # git/shellcheck/make/build-essential/vim/python3: general-purpose dev
@@ -80,12 +80,12 @@ sudo apt-get install -y gh
 
 echo "== Claude Code (native installer) =="
 # Asked once ever (see ask_once in common.sh) when claude isn't already
-# on PATH - no point asking whether to install something clearly already
+# on PATH: no point asking whether to install something clearly already
 # there, and re-checking "command -v claude" here (rather than persisting
 # that fact anywhere) means this self-corrects if claude's ever
 # uninstalled later, instead of trusting a flag that could go stale.
 # want_claude is captured once and reused below (for the CLAUDE.md step)
-# rather than re-running "command -v claude" there too - right after a
+# rather than re-running "command -v claude" there too. Right after a
 # fresh install in this same run, that check could false-negative: the
 # native installer's ~/.local/bin only lands on PATH via the
 # .bash_aliases block this script installs, which a fresh shell hasn't
@@ -106,15 +106,15 @@ echo "== Rendering and applying nftables egress ruleset =="
 # address (see nftables.template.conf) rather than being folded into the
 # general NFTABLES_ALLOWED_TCP_PORTS set, which would let the VM reach ANY
 # host on that port instead of just the secrets server. Missing this port
-# entirely was a real incident - the VM couldn't reach the secrets server
+# entirely was a real incident: the VM couldn't reach the secrets server
 # at all, and nothing failed loudly; git just fell back to an interactive
-# username prompt - so it's handled explicitly here rather than left to
+# username prompt. So it's handled explicitly here rather than left to
 # config.sh.
 nft_ports="$(printf '%s' "$NFTABLES_ALLOWED_TCP_PORTS" | sed 's/^ *//; s/ *$//; s/ /, /g')"
 NFTABLES_ALLOWED_TCP_PORTS_NFT="$nft_ports"
 HOST_GATEWAY_IP="$(ip route | awk '/^default/ { print $3; exit }')"
 if [ -z "$HOST_GATEWAY_IP" ]; then
-  echo "ERROR: couldn't determine the default gateway - can't scope the secrets-server firewall rule safely." >&2
+  echo "ERROR: couldn't determine the default gateway; can't scope the secrets-server firewall rule safely." >&2
   exit 1
 fi
 render_template "$SCRIPT_DIR/nftables.template.conf" /tmp/nftables.conf.rendered \
@@ -130,7 +130,7 @@ sudo sed -i '/^[[:space:]]*Listen localhost:631/s/^/#/' /etc/cups/cupsd.conf
 sudo systemctl restart cups
 
 echo "== Installing/updating nono =="
-# nono ships prebuilt .deb/.rpm on GitHub Releases - no real apt repo
+# nono ships prebuilt .deb/.rpm on GitHub Releases; no real apt repo
 # backs it (confirmed earlier: apt-cache policy showed nothing), so this
 # fetches the latest release's .deb for this VM's architecture directly
 # and dpkg -i's it, the same way it's actually installed on lftux already
@@ -145,10 +145,10 @@ nono_deb_url="$(curl -fsSL https://api.github.com/repos/nolabs-ai/nono/releases/
   | head -1)"
 if [ -n "$nono_deb_url" ]; then
   # Version comes from the release tag in the URL path
-  # (.../download/v0.74.0/...), not the .deb filename - decouples this
-  # from nono's asset-naming convention, only relies on GitHub's own
+  # (.../download/v0.74.0/...), not the .deb filename. That decouples this
+  # from nono's asset-naming convention, only relying on GitHub's own
   # release-asset URL structure. dpkg-query fails (nonzero) if nono-cli
-  # isn't installed yet, which is expected, not an error - old_version
+  # isn't installed yet, which is expected, not an error; old_version
   # just stays empty in that case.
   nono_new_version="$(printf '%s' "$nono_deb_url" | sed -n 's#.*/releases/download/\([^/]*\)/.*#\1#p')"
   nono_new_version="${nono_new_version#v}"
@@ -166,7 +166,7 @@ if [ -n "$nono_deb_url" ]; then
     fi
   fi
 else
-  echo "WARNING: couldn't find a nono .deb release for architecture $nono_arch - install manually:" >&2
+  echo "WARNING: couldn't find a nono .deb release for architecture $nono_arch; install manually:" >&2
   echo "  https://github.com/nolabs-ai/nono/releases" >&2
 fi
 
@@ -222,7 +222,7 @@ if [ "$ENABLE_INFERENCE_SSH_TUNNEL" = "true" ]; then
   # Reserved for the "MAYBE" host-inference-engine SSH reverse tunnel from
   # architecture.md. The VM side needs nothing beyond sshd (already enabled
   # above); the host-side keygen/RemoteForward setup lives in host-setup.sh.
-  # Not otherwise implemented yet - architecture.md itself marked it
+  # Not otherwise implemented yet; architecture.md itself marked it
   # speculative, and it's unrelated to git auth.
   :
 fi

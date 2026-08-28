@@ -1,20 +1,20 @@
 #!/bin/sh
-# host-secrets.sh - manage the named secrets secrets_server.py serves out of
+# host-secrets.sh: manage the named secrets secrets_server.py serves out of
 # macOS Keychain. Run on the host only; VMs never store secrets. Kept
 # separate from host-setup.sh so a plain "git pull && ./host-setup.sh" can
-# never touch a stored secret. POSIX sh throughout - the token prompt below
+# never touch a stored secret. POSIX sh throughout: the token prompt below
 # masks input with stty rather than bash's "read -s", since we don't rely
 # on what /bin/sh actually is.
 #
-# Every name here is a short logical name - "github-pat", not
-# "laptop-config-github-pat". Every Keychain-touching command below applies
+# Every name here is a short logical name ("github-pat", not
+# "laptop-config-github-pat"). Every Keychain-touching command below applies
 # config.sh's KEYCHAIN_PREFIX itself; that prefix is what marks a secret as
 # servable by secrets_server.py at all (see config.sh), so storing
 # something here already makes it servable, nothing further to declare.
 #
 # To lock a secret to one specific VM instead of leaving it available to
 # any VM, just include "@<vm-hostname>" as part of the name you give below
-# (e.g. "heroku-api-key@mytux") - secrets_server.py resolves which VM is
+# (e.g. "heroku-api-key@mytux"). secrets_server.py resolves which VM is
 # asking and only serves an "@vm"-suffixed name to that VM specifically.
 # Don't store both "name" and "name@vm-hostname" at once unless you
 # actually want every other VM falling through to the unlocked one.
@@ -23,7 +23,7 @@
 #   host-secrets.sh list
 #   host-secrets.sh set    <name>[@vm-hostname]   # interactive paste;
 #                                    # asks before overwriting. No setup
-#                                    # instructions printed here - see
+#                                    # instructions printed here; see
 #                                    # rotate-github-pat.sh/rotate-heroku-key.sh
 #                                    # for how to actually obtain a value.
 #   host-secrets.sh get    <name>[@vm-hostname]   # prints the secret to
@@ -53,7 +53,7 @@ EOF
 
 # Every Keychain-touching function below takes a short logical name (the
 # same one you'd pass on the command line, "@vm-hostname" suffix and all)
-# and applies KEYCHAIN_PREFIX itself - callers never need to think about
+# and applies KEYCHAIN_PREFIX itself: callers never need to think about
 # the prefix.
 secret_exists() {
   security find-generic-password -s "${KEYCHAIN_PREFIX}$1" >/dev/null 2>&1
@@ -113,18 +113,18 @@ cmd_set() {
     esac
   fi
 
-  # No setup instructions printed here by design - each secret's own
+  # No setup instructions printed here by design: each secret's own
   # rotate-<name>.sh script (rotate-github-pat.sh, rotate-heroku-key.sh)
   # owns that, so there's exactly one place to look, not two saying
   # slightly different things. Run this directly only if you already have
   # the value in hand.
   # Secrets this short are almost certainly a mistake (empty paste, partial
-  # paste, a stray keystroke) rather than a real one - ask again instead of
-  # silently storing something useless. The traps guarantee terminal echo
-  # gets restored no matter how this ends, including Ctrl-C - tested and
-  # confirmed the EXIT trap alone does NOT fire on an untrapped SIGINT
-  # (dash terminates immediately on the signal's default disposition), so
-  # INT/TERM/HUP need their own explicit handler too.
+  # paste, a stray keystroke) rather than a real one, so this asks again
+  # instead of silently storing something useless. The traps guarantee
+  # terminal echo gets restored no matter how this ends, including Ctrl-C.
+  # Tested and confirmed the EXIT trap alone does NOT fire on an untrapped
+  # SIGINT (dash terminates immediately on the signal's default
+  # disposition), so INT/TERM/HUP need their own explicit handler too.
   min_length=9
   trap 'stty echo' EXIT
   trap 'stty echo; exit 1' INT TERM HUP
@@ -132,12 +132,12 @@ cmd_set() {
     printf '%s' "Paste the secret for $name: "
     stty -echo
     if ! read -r token; then
-      # Not a cancel path - Ctrl-C skips this entirely (see above). This
+      # Not a cancel path (Ctrl-C skips this entirely, see above). This
       # is EOF/closed stdin (e.g. run non-interactively), where retrying
       # would just spin forever re-reading nothing.
       stty echo
       echo
-      echo "No more input - giving up." >&2
+      echo "No more input; giving up." >&2
       exit 1
     fi
     stty echo
@@ -145,7 +145,7 @@ cmd_set() {
     if [ "${#token}" -ge "$min_length" ]; then
       break
     fi
-    echo "That's only ${#token} character(s) - doesn't look like a real secret. Try again (Ctrl-C to cancel)." >&2
+    echo "That's only ${#token} character(s): doesn't look like a real secret. Try again (Ctrl-C to cancel)." >&2
   done
   trap - EXIT INT TERM HUP
   echo "(Received ${#token} characters.)"
@@ -160,7 +160,7 @@ cmd_set() {
 cmd_delete() {
   name="$1"
   if ! secret_exists "$name"; then
-    echo "$name isn't in Keychain - nothing to delete."
+    echo "$name isn't in Keychain; nothing to delete."
     return 0
   fi
   printf '%s' "Delete $name from Keychain? This can't be undone. [y/N] "

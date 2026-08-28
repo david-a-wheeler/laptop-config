@@ -1,6 +1,6 @@
 # shellcheck shell=sh
-# common.sh - shell functions shared by host-setup.sh and vm-setup.sh.
-# Sourced only (no shebang needed) - must stay POSIX sh, since it's sourced
+# common.sh: shell functions shared by host-setup.sh and vm-setup.sh.
+# Sourced only (no shebang needed): must stay POSIX sh, since it's sourced
 # by both host-setup.sh/host-secrets.sh (macOS) and vm-setup.sh (Ubuntu's
 # dash).
 #
@@ -11,7 +11,7 @@
 # Usage: macos_only <script-name-for-the-error-message>
 # Exits with a clear error if this isn't running on macOS. Call this right
 # after sourcing config.sh/common.sh (sourcing them is harmless on any
-# platform - just variable/function definitions - so it's fine for the
+# platform, just variable/function definitions, so it's fine for the
 # check to come after that, not before).
 macos_only() {
   if [ "$(uname -s)" != "Darwin" ]; then
@@ -76,7 +76,7 @@ install_managed_block() {
 }
 
 # Prints a file's mtime as a Unix timestamp. Tries GNU stat's syntax first
-# (Ubuntu VMs), falls back to BSD stat's (macOS host) - the two disagree on
+# (Ubuntu VMs), falls back to BSD stat's (macOS host): the two disagree on
 # flags and neither errors usefully on the other's, so this is the portable
 # way to get one number out of either.
 _mtime() {
@@ -85,7 +85,7 @@ _mtime() {
 
 # Usage: install_unless_locally_newer <src-file> <dest-file>
 # Copies <src-file> to <dest-file>, unless <dest-file> already exists,
-# differs in content from <src-file>, AND is newer than it - in that case
+# differs in content from <src-file>, AND is newer than it: in that case
 # someone edited the installed copy directly rather than the repo, so this
 # warns and prints the command to pull that edit back into the repo instead
 # of silently overwriting it.
@@ -94,7 +94,7 @@ install_unless_locally_newer() {
   dest="$2"
   if [ -f "$dest" ] && ! cmp -s "$src" "$dest"; then
     if [ "$(_mtime "$dest")" -gt "$(_mtime "$src")" ]; then
-      echo "WARNING: $dest is newer than $src and differs - leaving it alone." >&2
+      echo "WARNING: $dest is newer than $src and differs; leaving it alone." >&2
       echo "  To pull those changes back into the repo, run:" >&2
       echo "  cp \"$dest\" \"$src\"" >&2
       return 0
@@ -106,7 +106,7 @@ install_unless_locally_newer() {
 # Usage: confirmation_done <name>
 # True if <name> has previously been confirmed done (see mark_confirmed).
 # For a manual step with no reliable way to check its actual state (a
-# GUI-only System Settings toggle, say) - lets it prompt once instead of on
+# GUI-only System Settings toggle, say); lets it prompt once instead of on
 # every run. Stored per-checkout under confirmations/ (gitignored: host and
 # each VM confirm their own steps independently, and it's not something
 # anyone else's clone should inherit).
@@ -124,14 +124,14 @@ mark_confirmed() {
 
 # Usage: confirm_once <name>
 # Prompts once for whether <name> is actually done, defaulting to "no" (a
-# bare Enter means "keep asking next run," not "assume it's done") - only
+# bare Enter means "keep asking next run," not "assume it's done"): only
 # an explicit yes calls mark_confirmed. Call this after printing whatever
 # instructions <name> needs, and only inside an
 # `if ! confirmation_done <name>; then ... fi` block, so it's never shown
 # again once confirmed.
 confirm_once() {
   name="$1"
-  printf '%s' "Confirmed these are set - stop asking? [y/N] "
+  printf '%s' "Confirmed these are set, so stop asking? [y/N] "
   read -r response
   case "$response" in
     y | Y | yes | YES) mark_confirmed "$name" ;;
@@ -142,7 +142,7 @@ confirm_once() {
 # Usage: ask_once <name> <question>
 # Asks <question> [y/N] exactly once ever (per checkout) and remembers the
 # answer under confirmations/<name> (gitignored, same as
-# confirmation_done/mark_confirmed) - unlike confirm_once, a "no" is
+# confirmation_done/mark_confirmed): unlike confirm_once, a "no" is
 # remembered permanently here too, not re-asked next run, since this is
 # for a one-time preference (e.g. "install this optional thing?") rather
 # than polling whether a manual step got done yet. Returns success if the

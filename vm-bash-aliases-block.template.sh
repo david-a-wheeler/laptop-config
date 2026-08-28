@@ -1,10 +1,10 @@
 # Installed into ~/.bash_aliases (see install_managed_block in common.sh),
-# so everything below - noclaude(), heroku_session(), LAPTOP_CONFIG_AUTH_SESSION -
+# so everything below (noclaude(), heroku_session(), LAPTOP_CONFIG_AUTH_SESSION)
 # is only available from bash. A shell that doesn't source ~/.bash_aliases
 # (zsh's default config doesn't) won't see any of this. Supporting another
 # shell means a separate per-shell file with that shell's own syntax (e.g.
 # "local" and the "${*:-...}"/"${@:-...}" forms here aren't portable to
-# every shell), not just installing this same file somewhere else - not
+# every shell), not just installing this same file somewhere else. Not
 # done, since bash is the only shell in use on these VMs today.
 
 export VISUAL="vim"
@@ -19,7 +19,7 @@ export PATH="$PATH:$HOME/.local/bin"
 # half of that). It also strips SSH_AUTH_SOCK, a separate precaution so the
 # agent can't use a forwarded ssh-agent for anything else either, and
 # HEROKU_API_KEY, in case a heroku_session (below) subshell is still live in
-# this same shell tree when noclaude() gets called - a cached Heroku key
+# this same shell tree when noclaude() gets called: a cached Heroku key
 # should never reach the sandboxed agent either.
 if [ -z "$LAPTOP_CONFIG_AUTH_SESSION" ]; then
     export LAPTOP_CONFIG_AUTH_SESSION="session_$(head -c 16 /dev/urandom | xxd -p)"
@@ -31,15 +31,15 @@ noclaude() {
 
 # Fetches the Heroku API key once (one approval dialog) and runs
 # "command..." (default: an interactive $SHELL) as a *child* process with
-# HEROKU_API_KEY set only in that child's environment - this shell never
+# HEROKU_API_KEY set only in that child's environment; this shell never
 # holds the key itself. Meant for a burst of heroku commands: heroku_session
 # with no args, use heroku normally, exit the subshell, and the key is
-# gone from every live process again - no separate cleanup step, and
+# gone from every live process again, with no separate cleanup step and
 # nothing to remember to unset.
 heroku_session() {
     local key
     # "secrets-client.py" (bare name, not a relative path) is found via
-    # $PATH regardless of the current directory - vm-setup.sh installs it
+    # $PATH regardless of the current directory: vm-setup.sh installs it
     # to /usr/local/bin, which is on every login shell's $PATH by default
     # on Ubuntu, the same as vm-git-helper.py alongside it.
     key="$(secrets-client.py get heroku-api-key --context "heroku_session: ${*:-interactive shell}")" || return 1

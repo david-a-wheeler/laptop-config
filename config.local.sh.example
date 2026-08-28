@@ -1,9 +1,10 @@
-# config.local.sh.example - copy this to config.local.sh and edit.
+# config.local.sh.example: copy this to config.local.sh and edit.
 #
 # config.local.sh is gitignored and sourced last by config.sh, so anything
 # you set here overrides that file's defaults without you ever having to
-# edit the tracked config.sh - useful if you're reusing this repo for your
-# own setup and want `git pull` to keep working cleanly against upstream.
+# edit the tracked config.sh. That's useful if you're reusing this repo
+# for your own setup and want `git pull` to keep working cleanly against
+# upstream.
 #
 # Only override what you need to change; anything you don't set here keeps
 # config.sh's default. See config.sh itself for the full list of variables

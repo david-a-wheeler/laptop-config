@@ -2,8 +2,8 @@
 """VM-side generic secrets-server client.
 
 Fetches one named secret from secrets_server.py on the macOS host, over
-the same request/response protocol vm-git-helper.py already speaks - minus
-git's credential-helper-specific stdin/stdout format - as a reusable
+the same request/response protocol vm-git-helper.py already speaks (minus
+git's credential-helper-specific stdin/stdout format), as a reusable
 primitive for any VM-side script that needs a host-held secret released
 with human approval, not just git. heroku_session() (see
 vm-bash-aliases-block.template.sh) is the first non-git caller.
@@ -11,17 +11,17 @@ vm-bash-aliases-block.template.sh) is the first non-git caller.
 Usage: secrets-client.py get <name> [--context TEXT]
 Prints the secret to stdout and exits 0 on success; prints an error to
 stderr and exits nonzero otherwise (denied, not found, unreachable). "name"
-is always the short logical name (e.g. "heroku-api-key") - secrets_server.py
+is always the short logical name (e.g. "heroku-api-key"); secrets_server.py
 applies KEYCHAIN_PREFIX and any VM-lock suffix itself.
 
 Requires LAPTOP_CONFIG_AUTH_SESSION to be set (see
 vm-bash-aliases-block.template.sh, which generates one for every human
-interactive shell) - without it, the server denies the request without
+interactive shell). Without it, the server denies the request without
 ever consulting Keychain, same as any other caller. noclaude() strips it
 before an AI agent ever runs, so a sandboxed agent can never use this
 script to reach a real secret either.
 
-Rendered from secrets-client.template.py by vm-setup.sh - edit the
+Rendered from secrets-client.template.py by vm-setup.sh: edit the
 template, not the installed copy, since a re-run of vm-setup.sh overwrites
 this file.
 """

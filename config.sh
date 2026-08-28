@@ -1,6 +1,6 @@
 # shellcheck shell=sh
-# config.sh - person/machine-specific values shared by the setup scripts.
-# Sourced only (no shebang needed) - must stay POSIX sh, since it's sourced
+# config.sh: person/machine-specific values shared by the setup scripts.
+# Sourced only (no shebang needed): must stay POSIX sh, since it's sourced
 # by both host-setup.sh/host-secrets.sh (macOS) and vm-setup.sh (Ubuntu's
 # dash).
 #
@@ -8,7 +8,7 @@
 # common.sh's render_template(). To reuse the scripts for your own setup
 # without editing this tracked file (so a `git pull` of upstream changes
 # stays clean), copy config.local.sh.example to config.local.sh and set
-# overrides there instead - it's sourced last, after every default below,
+# overrides there instead; it's sourced last, after every default below,
 # and is gitignored.
 
 # Git identity (used by common.sh's configure_git_niceties).
@@ -31,9 +31,9 @@ SECRETS_SERVER_PORT="9876"
 
 # Prefix every host-secrets.sh-managed Keychain entry is stored under. This
 # is what marks a secret as servable at all: secrets_server.py only ever
-# looks up prefixed names, so "not found" already means "not servable" -
+# looks up prefixed names, so "not found" already means "not servable";
 # there's no separate list of allowed secret names to maintain here. Locking
-# a secret to one VM is a further naming convention on top of this - see
+# a secret to one VM is a further naming convention on top of this: see
 # host-secrets.sh and architecture.md's Secrets Server section.
 KEYCHAIN_PREFIX="laptop-config-"
 
@@ -46,7 +46,7 @@ KEYCHAIN_PREFIX="laptop-config-"
 # the proxy; no script changes needed.
 GIT_SECRETS="github.com:github-pat"
 
-# VM to lock the Heroku API key to (rotate-heroku-key.sh reads this) - set
+# VM to lock the Heroku API key to (rotate-heroku-key.sh reads this): set
 # to a VM hostname (e.g. "lftux") to restrict heroku_session on other VMs
 # to a denial, or leave empty for a key any VM can use. See
 # architecture.md's Secrets Server section for how VM-locking works.
@@ -56,7 +56,7 @@ HEROKU_API_KEY_VM="lftux"
 # the app bundle. host-setup.sh uses it to look up each running VM's name
 # and current IP live (`utmctl list`, `utmctl ip-address <name>`) and
 # builds ~/.ssh/config Host blocks from that, so "ssh lftux"/"scp x lftux:"
-# work directly - avahi's .local names don't resolve from the host, since
+# work directly; avahi's .local names don't resolve from the host, since
 # mDNS doesn't cross UTM's Shared Network NAT (and bridging isn't an option
 # on WiFi). Nothing here needs updating as VMs are added, removed, or
 # change IP: every host-setup.sh run re-queries utmctl fresh. Requires
@@ -65,7 +65,7 @@ UTMCTL="/Applications/UTM.app/Contents/MacOS/utmctl"
 
 # TCP ports the VM is allowed to reach outbound to ANY destination
 # (besides loopback and DNS). 22=SSH, 80/443=HTTP/HTTPS. Don't add
-# SECRETS_SERVER_PORT here - it gets its own rule in nftables.template.conf,
+# SECRETS_SERVER_PORT here: it gets its own rule in nftables.template.conf,
 # scoped to just the host's gateway address, since that port only ever has
 # one legitimate destination and shouldn't be reachable anywhere else.
 NFTABLES_ALLOWED_TCP_PORTS="22 80 443"
@@ -73,7 +73,7 @@ NFTABLES_ALLOWED_TCP_PORTS="22 80 443"
 # Extra paths noclaude() grants read-only nono access to, beyond the
 # current directory and ~/.claude (which every project needs). Space
 # separated. Add your own toolchain dirs here as needed. Use $HOME rather
-# than ~ - a tilde in a double-quoted assignment doesn't expand.
+# than ~, since a tilde in a double-quoted assignment doesn't expand.
 NONO_EXTRA_READ_PATHS="$HOME/.rbenv"
 
 # Set to "true" to also set up the SSH reverse tunnel (RemoteForward) for
@@ -82,10 +82,10 @@ NONO_EXTRA_READ_PATHS="$HOME/.rbenv"
 # to git auth.
 ENABLE_INFERENCE_SSH_TUNNEL="false"
 
-# Local, uncommitted overrides - anything set here wins, since this loads
+# Local, uncommitted overrides: anything set here wins, since this loads
 # last. $SCRIPT_DIR is already set by whichever script sourced this one
 # (host-setup.sh, vm-setup.sh, host-secrets.sh all set it before sourcing
-# config.sh). Silently does nothing if config.local.sh doesn't exist - see
+# config.sh). Silently does nothing if config.local.sh doesn't exist; see
 # config.local.sh.example to create one.
 if [ -f "$SCRIPT_DIR/config.local.sh" ]; then
   # shellcheck disable=SC1091

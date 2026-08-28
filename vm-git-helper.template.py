@@ -3,14 +3,14 @@
 
 Dynamically finds the host default gateway and requests an ephemeral secret
 from secrets_server.py running on the macOS host. Which secret to ask for
-is resolved from the git host git is asking about (GIT_SECRETS below, baked
-in from config.sh's GIT_SECRETS at install time by vm-setup.sh) - the name
-sent is always the short, unprefixed logical name; secrets_server.py
-applies KEYCHAIN_PREFIX itself. A host with no entry here is refused
-without ever contacting the server, so only git hosts you've deliberately
-configured are handled.
+is resolved from the git host git is asking about (GIT_SECRETS below,
+baked in from config.sh's GIT_SECRETS at install time by vm-setup.sh); the
+name sent is always the short, unprefixed logical name, since
+secrets_server.py applies KEYCHAIN_PREFIX itself. A host with no entry
+here is refused without ever contacting the server, so only git hosts
+you've deliberately configured are handled.
 
-Rendered from vm-git-helper.template.py by vm-setup.sh - edit the template,
+Rendered from vm-git-helper.template.py by vm-setup.sh: edit the template,
 not the installed copy, since a re-run of vm-setup.sh overwrites this file.
 """
 import json
@@ -48,7 +48,7 @@ def main():
   host = input_data.get("host", "")
   secret_name = GIT_SECRETS.get(host, "")
   if not secret_name:
-    # No secret configured for this git host - fail closed without ever
+    # No secret configured for this git host: fail closed without ever
     # contacting the secrets server.
     sys.exit(1)
 
