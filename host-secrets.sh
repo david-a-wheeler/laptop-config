@@ -96,11 +96,13 @@ EOF
       cat <<EOF
 
 Create a Heroku API token (see rotate-heroku-key.sh for a guided version):
-  1. Run "heroku login" (wherever you have the Heroku CLI - browser-based).
+  1. Run "heroku login" (wherever you have the Heroku CLI).
   2. Run "heroku authorizations:create --description \"laptop-config\" --short".
      (Deliberately not your account's single default API key from the
      Heroku dashboard - regenerating that would break anything else using
-     it. This makes a separate, independently revocable token instead.)
+     it, and it silently expires whenever you change your account
+     password. This makes a separate, independently revocable token
+     instead - there's no dashboard web UI for creating one, only the CLI.)
   3. Copy the printed token.
 EOF
       ;;
