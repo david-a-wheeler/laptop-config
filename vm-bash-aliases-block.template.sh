@@ -22,10 +22,17 @@ export PATH="$PATH:$HOME/.local/bin"
 # this same shell tree when noclaude() gets called: a cached Heroku key
 # should never reach the sandboxed agent either.
 if [ -z "$LAPTOP_CONFIG_AUTH_SESSION" ]; then
+    # shellcheck disable=SC2155  # head/xxd failing here just means an
+    # empty or malformed session id, which the secrets server already
+    # denies cleanly as "missing session" - not worth splitting the
+    # declare/assign for.
     export LAPTOP_CONFIG_AUTH_SESSION="session_$(head -c 16 /dev/urandom | xxd -p)"
 fi
 
 noclaude() {
+    # shellcheck disable=SC1007  # deliberate: clears all three vars for
+    # this one invocation, standard "VAR= VAR= command" idiom, not a
+    # typo'd assignment.
     LAPTOP_CONFIG_AUTH_SESSION= SSH_AUTH_SOCK= HEROKU_API_KEY= nono run --allow . --allow ~/.claude @@NONO_EXTRA_READ_ARGS@@ -- claude "$@"
 }
 
