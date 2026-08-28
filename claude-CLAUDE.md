@@ -16,7 +16,8 @@ prose, code comments, commit messages, PR descriptions, and docs:
 - No flattery. Try to focus on facts.
 - Avoid sounding like AI-generated text. Never use em dashes; use parentheses,
   semicolons, or restructured sentences instead.
-- Avoid AI-giveaway phrases: "dive into", "unleash", "game-changing", etc.
+- Avoid AI-giveaway phrases: "dive into", "unleash", "game-changing",
+  "load-bearing", etc.
 - Use logical quotation (punctuation outside quotes unless part of the quoted
   material) and the Oxford comma.
 - No corporate jargon.
@@ -35,7 +36,8 @@ You are running in an Ubuntu Linux VM running on top of a MacOS host via UTM.
 ## Working arrangement
 
 * I'll routinely switch git branches and edit files without always telling you.
-* Proposed Changes should generally be on a branch.
+* Proposed Changes should generally be on a branch unless we're
+  early in development.
 * Temporary files destinated for deletion can be stored in the current directory but I generally prefer them prefixed with `,` to make that clear.
 
 Thanks!
