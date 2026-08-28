@@ -24,7 +24,8 @@ fi
 
 echo "== Rotating the Heroku API key =="
 echo
-echo "Wherever you have the heroku CLI installed, run the following:"
+echo "Wherever you have the heroku CLI installed, run the following"
+echo "(after ensuring there's no AI running on it to view the login):"
 echo
 echo "~~~"
 echo "heroku login"
