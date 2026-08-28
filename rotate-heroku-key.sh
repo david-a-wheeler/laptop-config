@@ -70,21 +70,30 @@ cat <<EOF
 
 authorizations:create above always mints a brand new authorization, so
 any older "laptop-config"-described one is still valid on Heroku's side
-until revoked. This finds and revokes those automatically (never the one
-you just created):
+until revoked. Rotating with the same VM lock produces the identical
+description each time, so matching by description can't tell old from
+new; this instead keeps only the single most recently created
+laptop-config authorization (by "created_at", not by description) and
+revokes every other one. This uses heroku_session rather than "heroku
+login" to authenticate it, so it never touches ~/.netrc at all: there's
+nothing to log out of afterward.
+EOF
+echo
+if [ -n "$HEROKU_API_KEY_VM" ]; then
+  echo "On $HEROKU_API_KEY_VM (only, since the key's locked to that VM), run:"
+else
+  echo "On any VM, run:"
+fi
+cat <<'EOF'
 
 ~~~
-heroku login
-old_ids="\$(heroku authorizations -j | jq -r --arg desc "$description" \\
-  '.[] | select(.description | startswith("laptop-config")) |
-   select(.description != \$desc) | .id')"
-if [ -n "\$old_ids" ]; then
-  printf '%s\n' "\$old_ids" | while IFS= read -r id; do
-    heroku authorizations:revoke "\$id"
-  done
-else
-  echo "No old laptop-config authorizations to revoke."
-fi
-heroku logout
+heroku_session
+heroku authorizations -j | jq -r \
+  '[.[] | select(.description | startswith("laptop-config"))] |
+   sort_by(.created_at) | reverse | .[1:] | .[] | .id' |
+while IFS= read -r id; do
+  heroku authorizations:revoke "$id"
+done
+exit
 ~~~
 EOF
