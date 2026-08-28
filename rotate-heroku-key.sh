@@ -24,25 +24,30 @@ fi
 
 echo "== Rotating the Heroku API key =="
 echo
-echo "This doesn't run the Heroku CLI for you - use it wherever you have it"
-echo "(this host, or any VM), then paste the result here:"
+echo "Wherever you have the heroku CLI installed, run the following:"
 echo
-echo "  1. heroku login"
-echo "  2. heroku authorizations:create --description \"$description\" --short"
+echo "~~~"
+echo "heroku login"
+echo "heroku authorizations:create --description \"$description\" --short"
+echo "heroku logout"
+echo "~~~"
 echo
-echo "Deliberately not your account's single default API key from the Heroku"
-echo "dashboard - regenerating that would break anything else using it, and"
-echo "it silently expires whenever you change your account password. This"
-echo "makes a separate, independently revocable token instead - the Heroku"
-echo "dashboard has no web UI for creating one of those, only the CLI does."
+echo "We deliberately do NOT use your account's single default API key from"
+echo "the Heroku dashboard. Regenerating that would break anything else"
+echo "using it, and it silently expires whenever you change your account"
+echo "password. This makes a separate, independently revocable token"
+echo "instead - the Heroku dashboard has no web UI for creating one, only"
+echo "the CLI does."
+echo
+echo "The final \"heroku logout\" matters: \"heroku login\" writes a session"
+echo "credential to ~/.netrc that we don't want lying around once we have"
+echo "the dedicated token above - logout both removes it locally and"
+echo "invalidates it server-side. The token from authorizations:create is"
+echo "independent of that login session, so logging out doesn't affect it."
 echo
 
 "$SCRIPT_DIR/host-secrets.sh" set "$name"
 
-echo
-echo "Stored as \"$name\". This doesn't touch any other secret - if this"
-echo "replaces an existing key of the same name, heroku_session on the VM picks"
-echo "up the new one immediately (it fetches fresh every time)."
 echo
 if [ $# -ge 1 ]; then
   echo "Try it: on $1 (only - this key is locked to that VM), run"

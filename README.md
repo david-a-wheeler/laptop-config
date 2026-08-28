@@ -42,8 +42,8 @@ shell's `git push`/`git fetch` on a VM triggers a macOS approval dialog and
 succeeds; the same command run via `noclaude` fails immediately instead
 (see architecture.md's Secrets Server section).
 
-Want Heroku access from a VM too? `./host-secrets.sh set heroku-api-key`
-(see the script's printed instructions, or `rotate-heroku-key.sh`), then
+Want Heroku access from a VM too? `./rotate-heroku-key.sh` (or
+`./rotate-heroku-key.sh <vm-hostname>` to lock it to one VM), then
 `heroku_session` on the VM - see architecture.md's Secrets Server section.
 Optional, and independent of the git setup above.
 

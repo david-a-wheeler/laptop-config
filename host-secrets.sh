@@ -21,9 +21,11 @@
 #
 # Usage:
 #   host-secrets.sh list
-#   host-secrets.sh set    <name>[@vm-hostname]   # interactive; prints
-#                                    # instructions for known names, asks
-#                                    # before overwriting
+#   host-secrets.sh set    <name>[@vm-hostname]   # interactive paste;
+#                                    # asks before overwriting. No setup
+#                                    # instructions printed here - see
+#                                    # rotate-github-pat.sh/rotate-heroku-key.sh
+#                                    # for how to actually obtain a value.
 #   host-secrets.sh get    <name>[@vm-hostname]   # prints the secret to
 #                                    # stdout (careful)
 #   host-secrets.sh delete <name>[@vm-hostname]   # asks for confirmation
@@ -77,41 +79,6 @@ cmd_get() {
   security find-generic-password -s "${KEYCHAIN_PREFIX}$1" -w
 }
 
-# Per-secret setup instructions. Add a case here for any secret worth
-# documenting how to (re)create - not just the ones in GIT_SECRETS, since
-# secrets don't need a config.sh declaration to be servable any more (see
-# KEYCHAIN_PREFIX above).
-print_recipe() {
-  case "$1" in
-    github-pat)
-      cat <<EOF
-
-Create a GitHub Personal Access Token:
-  1. Open https://github.com/settings/tokens
-  2. Generate new token (classic) - scopes: repo, workflow.
-  3. Copy the token (starts with "ghp_" or "github_pat_").
-EOF
-      ;;
-    heroku-api-key)
-      cat <<EOF
-
-Create a Heroku API token (see rotate-heroku-key.sh for a guided version):
-  1. Run "heroku login" (wherever you have the Heroku CLI).
-  2. Run "heroku authorizations:create --description \"laptop-config\" --short".
-     (Deliberately not your account's single default API key from the
-     Heroku dashboard - regenerating that would break anything else using
-     it, and it silently expires whenever you change your account
-     password. This makes a separate, independently revocable token
-     instead - there's no dashboard web UI for creating one, only the CLI.)
-  3. Copy the printed token.
-EOF
-      ;;
-    *)
-      echo "No setup recipe for '$1' yet - add one to host-secrets.sh's print_recipe()." >&2
-      ;;
-  esac
-}
-
 cmd_set() {
   name="$1"
   if secret_exists "$name"; then
@@ -126,10 +93,11 @@ cmd_set() {
     esac
   fi
 
-  # Strip any "@vm-hostname" lock suffix before looking up a recipe - the
-  # setup instructions for "heroku-api-key@mytux" are the same as for
-  # "heroku-api-key".
-  print_recipe "${name%%@*}"
+  # No setup instructions printed here by design - each secret's own
+  # rotate-<name>.sh script (rotate-github-pat.sh, rotate-heroku-key.sh)
+  # owns that, so there's exactly one place to look, not two saying
+  # slightly different things. Run this directly only if you already have
+  # the value in hand.
   # Secrets this short are almost certainly a mistake (empty paste, partial
   # paste, a stray keystroke) rather than a real one - ask again instead of
   # silently storing something useless. The traps guarantee terminal echo
