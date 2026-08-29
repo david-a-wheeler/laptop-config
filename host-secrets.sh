@@ -43,19 +43,6 @@ secret_exists() {
 }
 
 cmd_list() {
-  echo "Named secrets referenced by config.sh's GIT_SECRETS:"
-  for pair in $GIT_SECRETS; do
-    host="${pair%%:*}"
-    name="${pair#*:}"
-    if secret_exists "$name"; then
-      state="present"
-    else
-      state="MISSING"
-    fi
-    echo "  $name (for $host): $state"
-  done
-
-  echo
   echo "All secrets currently servable (stored under Keychain's \"${KEYCHAIN_PREFIX}\" prefix):"
   # "security dump-keychain" (no "-d") lists item attributes only, never
   # secret values: the closest thing security(1) has to "list by prefix",
