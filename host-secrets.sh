@@ -6,15 +6,18 @@
 # masks input with stty rather than bash's "read -s", since we don't rely
 # on what /bin/sh actually is.
 #
-# Every name here is a short logical name ("github-pat", not
-# "laptop-config-github-pat"). Every Keychain-touching command below applies
+# Every name here is a short logical name ("GH_TOKEN", not
+# "laptop-config-GH_TOKEN") - spelled like the environment variable it
+# stands in for wherever one exists (see config.sh's GIT_SECRETS comment),
+# so this name is self-documenting and secret_session needs no separate
+# lookup table. Every Keychain-touching command below applies
 # config.sh's KEYCHAIN_PREFIX itself; that prefix is what marks a secret as
 # servable by secrets_server.py at all (see config.sh), so storing
 # something here already makes it servable, nothing further to declare.
 #
 # To lock a secret to one specific VM instead of leaving it available to
 # any VM, just include "@<vm-hostname>" as part of the name you give below
-# (e.g. "heroku-api-key@mytux"). secrets_server.py resolves which VM is
+# (e.g. "HEROKU_API_KEY@mytux"). secrets_server.py resolves which VM is
 # asking and only serves an "@vm"-suffixed name to that VM specifically.
 # Don't store both "name" and "name@vm-hostname" at once unless you
 # actually want every other VM falling through to the unlocked one.

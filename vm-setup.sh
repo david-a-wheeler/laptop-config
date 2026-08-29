@@ -77,6 +77,12 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
   | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
 sudo apt-get update
 sudo apt-get install -y gh
+# This installs the gh binary only; nothing here ever runs "gh auth login".
+# That command persists a long-lived token into this VM (a system keyring
+# if one's running, else a plaintext file), exactly the kind of resident
+# credential this repo's whole design keeps out of VMs. gh_session (see
+# vm-bash-aliases-block.template.sh) gets gh the same GH_TOKEN secret
+# git already uses, ephemerally, per burst of commands, instead.
 
 echo "== Claude Code (native installer) =="
 # Asked once ever (see ask_once in common.sh) when claude isn't already
@@ -191,7 +197,7 @@ sudo chmod +x /usr/local/bin/vm-git-helper.py
 rm -f /tmp/vm-git-helper.py.rendered
 git config --global credential.helper /usr/local/bin/vm-git-helper.py
 
-echo "== Installing secrets-client (generic secrets-server CLI, used by heroku_session) =="
+echo "== Installing secrets-client (generic secrets-server CLI, used by secret_session) =="
 render_template "$SCRIPT_DIR/secrets-client.template.py" /tmp/secrets-client.py.rendered \
   SECRETS_SERVER_PORT
 sudo cp /tmp/secrets-client.py.rendered /usr/local/bin/secrets-client.py
@@ -207,7 +213,7 @@ if [ "$want_claude" = true ]; then
   install_unless_locally_newer "$SCRIPT_DIR/claude-CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 fi
 
-echo "== Managing ~/.bash_aliases block (editor, LAPTOP_CONFIG_AUTH_SESSION, noclaude, heroku_session) =="
+echo "== Managing ~/.bash_aliases block (editor, LAPTOP_CONFIG_AUTH_SESSION, noclaude, secret_session) =="
 nono_extra_read_args=""
 for path in $NONO_EXTRA_READ_PATHS; do
   nono_extra_read_args="${nono_extra_read_args}--read ${path} "

@@ -1,10 +1,11 @@
 #!/bin/sh
 # rotate-heroku-key.sh: creates a new Heroku API token and stores it in
-# Keychain under "heroku-api-key" (or "heroku-api-key@<vm-hostname>" if
+# Keychain under "HEROKU_API_KEY" (or "HEROKU_API_KEY@<vm-hostname>" if
 # config.sh's HEROKU_API_KEY_VM is set, to lock it to a single VM: see
-# architecture.md's Secrets Server section). Never touches any other
-# secret; it's the same "rotate first, cut over later" shape as
-# rotate-github-pat.sh.
+# architecture.md's Secrets Server section) - spelled like the environment
+# variable heroku_session sets, the same convention GH_TOKEN uses. Never
+# touches any other secret; it's the same "rotate first, cut over later"
+# shape as rotate-github-pat.sh.
 #
 # Usage: rotate-heroku-key.sh
 set -eu
@@ -16,10 +17,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Host-only (Keychain via "security" doesn't exist on Linux).
 macos_only "rotate-heroku-key.sh"
 
-name="heroku-api-key"
+name="HEROKU_API_KEY"
 description="laptop-config"
 if [ -n "$HEROKU_API_KEY_VM" ]; then
-  name="heroku-api-key@$HEROKU_API_KEY_VM"
+  name="HEROKU_API_KEY@$HEROKU_API_KEY_VM"
   description="laptop-config: $HEROKU_API_KEY_VM"
 fi
 

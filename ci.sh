@@ -54,7 +54,7 @@ if ! shellcheck -x -s bash "$tmp/bash-aliases.sh"; then
   fail=1
 fi
 
-GIT_SECRETS_PY_DICT='{"github.com": "github-pat"}'
+GIT_SECRETS_PY_DICT='{"github.com": "GH_TOKEN"}'
 render_template vm-git-helper.template.py "$tmp/vm-git-helper.py" SECRETS_SERVER_PORT GIT_SECRETS_PY_DICT
 render_template secrets-client.template.py "$tmp/secrets-client.py" SECRETS_SERVER_PORT
 render_template secrets_server.template.py "$tmp/secrets_server.py" \

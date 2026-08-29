@@ -33,9 +33,10 @@ A few pieces depend on each other, so the first pass needs this order:
    qemu-guest-agent is running from step 1), and pushes the key straight to
    each VM with `ssh-copy-id`. It'll ask for that VM's login password once
    per VM; after that, key auth just works. No commit, no second VM pass.
-3. **On the host**: `./host-secrets.sh set github-pat`. Without
+3. **On the host**: `./host-secrets.sh set GH_TOKEN`. Without
    this, every `git push`/`fetch` from a VM gets denied (no secret in
-   Keychain to release).
+   Keychain to release), and so does `gh_session gh ...` (`gh` reads the
+   same secret; see architecture.md's Secrets Server section).
 
 After that: `ssh lftux`/`scp x lftux:` works from the host, and a human
 shell's `git push`/`git fetch` on a VM triggers a macOS approval dialog and
@@ -94,13 +95,16 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   every currently servable secret, scanning Keychain directly rather than
   relying on a declared list.
 - `rotate-github-pat.sh`: creates a new GitHub PAT and stores it under
-  `github-pat` in Keychain, without touching `config.sh` or the currently
+  `GH_TOKEN` in Keychain, without touching `config.sh` or the currently
   active secret. Safe to run any time (GitHub PATs expire, so expect at
-  least once a year) without risking breaking `git push` mid-rotation. See
-  the script's own printed output for how to actually cut over once the
-  new token's confirmed stored.
+  least once a year) without risking breaking `git push` mid-rotation. This
+  one secret backs both git's HTTPS auth and `gh` (`gh` reads a token
+  straight out of the `GH_TOKEN`/`GITHUB_TOKEN` env vars, no `gh auth
+  login` involved; see architecture.md's Secrets Server section). See the
+  script's own printed output for how to actually cut over once the new
+  token's confirmed stored.
 - `rotate-heroku-key.sh`: same idea as `rotate-github-pat.sh`, for
-  `heroku-api-key`. Set `config.sh`'s `HEROKU_API_KEY_VM` to store it
+  `HEROKU_API_KEY`. Set `config.sh`'s `HEROKU_API_KEY_VM` to store it
   locked to one VM instead of available to any of them. Once you've
   confirmed the new key works, it also finds and revokes any older Heroku
   authorization for you (via `heroku_session`, so it never touches
@@ -112,18 +116,21 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
 - `secrets-client.template.py`: generic VM-side CLI for fetching any named
   secret from `secrets_server.py` (`secrets-client.py get <name>`), the
   same protocol `vm-git-helper.py` speaks, without git's credential-helper
-  format. `heroku_session` (below) is the first non-git caller.
+  format. `secret_session` (below) is the generic non-git caller.
 - `nftables.template.conf`: VM egress firewall ruleset.
 - `vm-bash-aliases-block.template.sh`: the managed block installed into each
   VM's `~/.bash_aliases`: editor, `LAPTOP_CONFIG_AUTH_SESSION`, the
-  `noclaude()` sandboxed-agent wrapper, and `heroku_session` (fetches
-  `heroku-api-key` once and runs a command, or an interactive shell if none
-  given, as a child process with `HEROKU_API_KEY` set only there, so a
-  burst of `heroku` commands needs one approval click instead of one per
-  command, and the key is gone again once you exit). Bash-only for now:
-  it's installed into `~/.bash_aliases`, which a shell like zsh doesn't
-  source by default; supporting another shell would mean a separate file
-  in that shell's own syntax, not just installing this one elsewhere.
+  `noclaude()` sandboxed-agent wrapper, and `secret_session` (fetches one
+  named secret once and runs a command, or an interactive shell if none
+  given, as a child process with that secret set under the given
+  environment variable name only there, so a burst of commands against
+  whatever it authenticates needs one approval click instead of one per
+  command, and the secret is gone again once you exit); `heroku_session`
+  and `gh_session` are thin aliases over it for `HEROKU_API_KEY` and
+  `GH_TOKEN`. Bash-only for now: it's installed into `~/.bash_aliases`,
+  which a shell like zsh doesn't source by default; supporting another
+  shell would mean a separate file in that shell's own syntax, not just
+  installing this one elsewhere.
 - `claude-CLAUDE.md`: global Claude Code instructions, installed to each
   VM's `~/.claude/CLAUDE.md` (Claude Code runs in the VMs, not on the host,
   so this isn't installed by host-setup.sh). If you've edited the installed
