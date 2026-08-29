@@ -71,56 +71,31 @@ cmd_get() {
 
 cmd_set() {
   name="$1"
-  tty_stdin=false
-  if [ -t 0 ]; then
-    tty_stdin=true
-  fi
-
-  # Too-short secrets are a mistake, prevent them.
   min_length=9
-  if [ "$tty_stdin" = true ]; then
+  if [ -t 0 ]; then
+    # Interactive: mask input, retry on a too-short paste. A failing
+    # "read" (Ctrl-D) isn't guarded, so "set -e" exits right here,
+    # still running the EXIT trap below to restore echo.
     trap 'stty echo' EXIT
     trap 'stty echo; exit 1' INT TERM HUP
-  fi
-  while :; do
-    if [ "$tty_stdin" = true ]; then
+    while :; do
       printf '%s' "Paste the secret for $name: "
       stty -echo
-    fi
-    if ! read -r token; then
-      # Not a cancel path (Ctrl-C skips this entirely, see above). This
-      # is EOF/closed stdin (e.g. run non-interactively), where retrying
-      # would just spin forever re-reading nothing.
-      if [ "$tty_stdin" = true ]; then
-        stty echo
-        echo
-      fi
-      echo "No more input; giving up." >&2
-      exit 1
-    fi
-    if [ "$tty_stdin" = true ]; then
+      read -r token
       stty echo
       echo
-    fi
-    if [ "${#token}" -ge "$min_length" ]; then
-      break
-    fi
-    echo "That's only ${#token} character(s); too short." >&2
-    if [ "$tty_stdin" = false ]; then
-      echo "stdin isn't a terminal, so there's nothing left to retry with; giving up." >&2
-      exit 1
-    fi
-    echo "Try again (Ctrl-C to cancel)." >&2
-  done
-  if [ "$tty_stdin" = true ]; then
+      [ "${#token}" -ge "$min_length" ] && break
+      echo "Too short (${#token} chars); try again (Ctrl-C to cancel)." >&2
+    done
     trap - EXIT INT TERM HUP
+  else
+    # Piped: exactly one line, no retrying possible.
+    read -r token
+    [ "${#token}" -ge "$min_length" ] || { echo "Secret too short (${#token} chars)." >&2; exit 1; }
   fi
-  echo "(Received ${#token} characters.)"
-
-  if secret_exists "$name"; then
-    security delete-generic-password -s "${KEYCHAIN_PREFIX}${name}" >/dev/null 2>&1
-  fi
-  security add-generic-password -a "$USER" -s "${KEYCHAIN_PREFIX}${name}" -w "$token"
+  # -U updates the existing item in place instead of erroring on a
+  # duplicate; no separate delete step needed.
+  security add-generic-password -U -a "$USER" -s "${KEYCHAIN_PREFIX}${name}" -w "$token"
   echo "Stored $name in Keychain."
 }
 
