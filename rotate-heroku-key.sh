@@ -24,30 +24,32 @@ if [ -n "$HEROKU_API_KEY_VM" ]; then
   description="laptop-config: $HEROKU_API_KEY_VM"
 fi
 
-echo "== Rotating the Heroku API key =="
-echo
-echo "Wherever you have the heroku CLI installed, run the following"
-echo "(after ensuring there's no AI running on it to view the login):"
-echo
-echo "~~~"
-echo "heroku login"
-echo "heroku authorizations:create --description \"$description\" --short"
-echo "heroku logout"
-echo "~~~"
-echo
-echo "We deliberately do NOT use your account's single default API key from"
-echo "the Heroku dashboard. Regenerating that would break anything else"
-echo "using it, and it silently expires whenever you change your account"
-echo "password. This makes a separate, independently revocable token"
-echo "instead: the Heroku dashboard has no web UI for creating one, only"
-echo "the CLI does."
-echo
-echo "The final \"heroku logout\" matters: \"heroku login\" writes a session"
-echo "credential to ~/.netrc that we don't want lying around once we have"
-echo "the dedicated token above. Logout both removes it locally and"
-echo "invalidates it server-side; the token from authorizations:create is"
-echo "independent of that login session, so logging out doesn't affect it."
-echo
+cat <<EOF
+== Rotating the Heroku API key ==
+
+Wherever you have the heroku CLI installed, run the following
+(after ensuring there's no AI running on it to view the login):
+
+~~~
+heroku login
+heroku authorizations:create --description "$description" --short
+heroku logout
+~~~
+
+We deliberately do NOT use your account's single default API key from
+the Heroku dashboard. Regenerating that would break anything else
+using it, and it silently expires whenever you change your account
+password. This makes a separate, independently revocable token
+instead: the Heroku dashboard has no web UI for creating one, only
+the CLI does.
+
+The final "heroku logout" matters: "heroku login" writes a session
+credential to ~/.netrc that we don't want lying around once we have
+the dedicated token above. Logout both removes it locally and
+invalidates it server-side; the token from authorizations:create is
+independent of that login session, so logging out doesn't affect it.
+
+EOF
 
 "$SCRIPT_DIR/host-secrets.sh" set "$name"
 
@@ -58,13 +60,15 @@ if [ -n "$HEROKU_API_KEY_VM" ]; then
 else
   echo "Try it: on any VM, run"
 fi
-echo
-echo "  heroku_session heroku auth:whoami"
-echo
-echo "That fetches the key (one approval dialog here on the host), runs"
-echo "\"heroku auth:whoami\" with it set, and it's gone again once that"
-echo "command exits. Run \"heroku_session\" with no arguments instead to drop"
-echo "into a shell for a whole burst of heroku commands at once."
+cat <<'EOF'
+
+  heroku_session heroku auth:whoami
+
+That fetches the key (one approval dialog here on the host), runs
+"heroku auth:whoami" with it set, and it's gone again once that
+command exits. Run "heroku_session" with no arguments instead to drop
+into a shell for a whole burst of heroku commands at once.
+EOF
 cat <<EOF
 
 == Once you've confirmed the new key works ==

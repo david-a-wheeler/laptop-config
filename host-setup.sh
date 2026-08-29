@@ -140,14 +140,14 @@ if [ -x "$UTMCTL" ]; then
       | while IFS= read -r vm_name; do
           vm_ip="$("$UTMCTL" ip-address "$vm_name" 2>/dev/null | head -1)"
           if [ -n "$vm_ip" ]; then
-            {
-              echo "Host $vm_name"
-              echo "    HostName $vm_ip"
-              echo "    User $VM_USER"
-              echo "    IdentityFile ~/.ssh/id_ed25519"
-              echo "    IdentitiesOnly yes"
-              echo
-            } >> "$ssh_config_block"
+            cat <<HOSTBLOCK >> "$ssh_config_block"
+Host $vm_name
+    HostName $vm_ip
+    User $VM_USER
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+
+HOSTBLOCK
             if ! ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" \
                  -o StrictHostKeyChecking=accept-new "$VM_USER@$vm_ip"; then
               echo "WARNING: couldn't copy the host's SSH key to $vm_name ($vm_ip); 'ssh $vm_name' will need a password until this succeeds." >&2
