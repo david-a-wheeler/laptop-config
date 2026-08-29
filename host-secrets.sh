@@ -1,49 +1,18 @@
 #!/bin/sh
 # host-secrets.sh: manage the named secrets secrets_server.py serves out of
-# macOS Keychain. Run on the host only; VMs never store secrets. Kept
-# separate from host-setup.sh so a plain "git pull && ./host-setup.sh" can
-# never touch a stored secret. POSIX sh throughout: the token prompt below
-# masks input with stty rather than bash's "read -s", since we don't rely
-# on what /bin/sh actually is.
+# macOS Keychain. Run on the host only; VMs never store secrets.
+# MUST be on MacOS. POSIX sh throughout.
 #
-# Every name here is a short logical name ("GH_TOKEN", not
-# "laptop-config-GH_TOKEN") - spelled like the environment variable it
-# stands in for wherever one exists (see config.sh's GIT_SECRETS comment),
-# so this name is self-documenting and secret_session needs no separate
-# lookup table. Every Keychain-touching command below applies
-# config.sh's KEYCHAIN_PREFIX itself; that prefix is what marks a secret as
-# servable by secrets_server.py at all (see config.sh), so storing
-# something here already makes it servable, nothing further to declare.
+# Every secret name here is a short logical name (like "GH_TOKEN")
+# spelled like the environment variable it stands in if one exists.
+# Every Keychain-touching command below applies config.sh's KEYCHAIN_PREFIX
+# to mark it as a secret managed here (anything else is not visible).
 #
 # To lock a secret to one specific VM instead of leaving it available to
-# any VM, just include "@<vm-hostname>" as part of the name you give below
+# any VM, just append "@<vm-hostname>" as part of the name you give below
 # (e.g. "HEROKU_API_KEY@mytux"). secrets_server.py resolves which VM is
 # asking and only serves an "@vm"-suffixed name to that VM specifically.
-# Don't store both "name" and "name@vm-hostname" at once unless you
-# actually want every other VM falling through to the unlocked one.
 #
-# Usage:
-#   host-secrets.sh list
-#   host-secrets.sh set    <name>[@vm-hostname]   # interactive paste;
-#                                    # asks before overwriting. No setup
-#                                    # instructions printed here; see
-#                                    # rotate-github-pat.sh/rotate-heroku-key.sh
-#                                    # for how to actually obtain a value.
-#                                    # Renaming an existing secret (e.g. after
-#                                    # a naming-convention change) needs no
-#                                    # setup step: "host-secrets.sh get OLD |
-#                                    # host-secrets.sh set NEW" pipes the
-#                                    # value straight across without ever
-#                                    # displaying or re-typing it. Piped
-#                                    # input always overwrites without
-#                                    # asking, and only works for a NEW name
-#                                    # that doesn't already exist (piped
-#                                    # input has exactly one line to give,
-#                                    # not a separate y/N answer first).
-#   host-secrets.sh get    <name>[@vm-hostname]   # prints the secret to
-#                                    # stdout (careful)
-#   host-secrets.sh delete <name>[@vm-hostname]   # asks for confirmation
-#                                    # first
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -56,9 +25,9 @@ macos_only "host-secrets.sh"
 usage() {
   cat <<EOF >&2
 Usage: $0 list
-       $0 set <name>[@vm-hostname]
-       $0 get <name>[@vm-hostname]
-       $0 delete <name>[@vm-hostname]
+       $0 set <name>[@vm-hostname] # set secret <name> from stdin
+       $0 get <name>[@vm-hostname] # print secret <name> to stdout
+       $0 delete <name>[@vm-hostname] # delete secret <name>
 
 Run "$0 list" to see every currently servable secret.
 EOF
@@ -115,44 +84,12 @@ cmd_get() {
 
 cmd_set() {
   name="$1"
-  # A piped secret (e.g. "host-secrets.sh get OLD | host-secrets.sh set
-  # NEW", the supported way to rename/copy one without ever re-pasting it
-  # by hand) is exactly one line with no room for an interactive y/N
-  # exchange first, so this only asks when stdin's actually a terminal;
-  # piped input always overwrites.
   tty_stdin=false
   if [ -t 0 ]; then
     tty_stdin=true
   fi
-  if secret_exists "$name" && [ "$tty_stdin" = true ]; then
-    printf '%s already exists in Keychain. Overwrite? [y/N] ' "$name"
-    read -r confirm
-    case "$confirm" in
-      y | Y | yes | YES) : ;;
-      *)
-        echo "Leaving $name unchanged."
-        return 0
-        ;;
-    esac
-  fi
 
-  # No setup instructions printed here by design: each secret's own
-  # rotate-<name>.sh script (rotate-github-pat.sh, rotate-heroku-key.sh)
-  # owns that, so there's exactly one place to look, not two saying
-  # slightly different things. Run this directly only if you already have
-  # the value in hand.
-  # Secrets this short are almost certainly a mistake (empty paste, partial
-  # paste, a stray keystroke) rather than a real one, so this asks again
-  # instead of silently storing something useless (only when interactive:
-  # piped stdin has exactly one line to give, so there's nothing to retry
-  # with). The traps guarantee terminal echo gets restored no matter how
-  # this ends, including Ctrl-C; skipped entirely when stdin isn't a
-  # terminal; "stty -echo"/"stty echo" fail outright on a pipe
-  # ("Inappropriate ioctl for device"), which under "set -e" would abort
-  # this function before ever reading the piped value.
-  # Tested and confirmed the EXIT trap alone does NOT fire on an untrapped
-  # SIGINT (dash terminates immediately on the signal's default
-  # disposition), so INT/TERM/HUP need their own explicit handler too.
+  # Too-short secrets are a mistake, prevent them.
   min_length=9
   if [ "$tty_stdin" = true ]; then
     trap 'stty echo' EXIT
@@ -181,7 +118,7 @@ cmd_set() {
     if [ "${#token}" -ge "$min_length" ]; then
       break
     fi
-    echo "That's only ${#token} character(s): doesn't look like a real secret." >&2
+    echo "That's only ${#token} character(s); too short." >&2
     if [ "$tty_stdin" = false ]; then
       echo "stdin isn't a terminal, so there's nothing left to retry with; giving up." >&2
       exit 1
@@ -206,17 +143,7 @@ cmd_delete() {
     echo "$name isn't in Keychain; nothing to delete."
     return 0
   fi
-  printf '%s' "Delete $name from Keychain? This can't be undone. [y/N] "
-  read -r confirm
-  case "$confirm" in
-    y | Y | yes | YES)
-      security delete-generic-password -s "${KEYCHAIN_PREFIX}${name}" >/dev/null 2>&1
-      echo "Deleted $name from Keychain."
-      ;;
-    *)
-      echo "Leaving $name unchanged."
-      ;;
-  esac
+  security delete-generic-password -s "${KEYCHAIN_PREFIX}${name}" >/dev/null 2>&1
 }
 
 [ $# -ge 1 ] || usage
