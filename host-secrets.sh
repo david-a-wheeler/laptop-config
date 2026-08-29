@@ -29,6 +29,17 @@
 #                                    # instructions printed here; see
 #                                    # rotate-github-pat.sh/rotate-heroku-key.sh
 #                                    # for how to actually obtain a value.
+#                                    # Renaming an existing secret (e.g. after
+#                                    # a naming-convention change) needs no
+#                                    # setup step: "host-secrets.sh get OLD |
+#                                    # host-secrets.sh set NEW" pipes the
+#                                    # value straight across without ever
+#                                    # displaying or re-typing it. Piped
+#                                    # input always overwrites without
+#                                    # asking, and only works for a NEW name
+#                                    # that doesn't already exist (piped
+#                                    # input has exactly one line to give,
+#                                    # not a separate y/N answer first).
 #   host-secrets.sh get    <name>[@vm-hostname]   # prints the secret to
 #                                    # stdout (careful)
 #   host-secrets.sh delete <name>[@vm-hostname]   # asks for confirmation
@@ -104,7 +115,16 @@ cmd_get() {
 
 cmd_set() {
   name="$1"
-  if secret_exists "$name"; then
+  # A piped secret (e.g. "host-secrets.sh get OLD | host-secrets.sh set
+  # NEW", the supported way to rename/copy one without ever re-pasting it
+  # by hand) is exactly one line with no room for an interactive y/N
+  # exchange first, so this only asks when stdin's actually a terminal;
+  # piped input always overwrites.
+  tty_stdin=false
+  if [ -t 0 ]; then
+    tty_stdin=true
+  fi
+  if secret_exists "$name" && [ "$tty_stdin" = true ]; then
     printf '%s already exists in Keychain. Overwrite? [y/N] ' "$name"
     read -r confirm
     case "$confirm" in
@@ -123,34 +143,54 @@ cmd_set() {
   # the value in hand.
   # Secrets this short are almost certainly a mistake (empty paste, partial
   # paste, a stray keystroke) rather than a real one, so this asks again
-  # instead of silently storing something useless. The traps guarantee
-  # terminal echo gets restored no matter how this ends, including Ctrl-C.
+  # instead of silently storing something useless (only when interactive:
+  # piped stdin has exactly one line to give, so there's nothing to retry
+  # with). The traps guarantee terminal echo gets restored no matter how
+  # this ends, including Ctrl-C; skipped entirely when stdin isn't a
+  # terminal; "stty -echo"/"stty echo" fail outright on a pipe
+  # ("Inappropriate ioctl for device"), which under "set -e" would abort
+  # this function before ever reading the piped value.
   # Tested and confirmed the EXIT trap alone does NOT fire on an untrapped
   # SIGINT (dash terminates immediately on the signal's default
   # disposition), so INT/TERM/HUP need their own explicit handler too.
   min_length=9
-  trap 'stty echo' EXIT
-  trap 'stty echo; exit 1' INT TERM HUP
+  if [ "$tty_stdin" = true ]; then
+    trap 'stty echo' EXIT
+    trap 'stty echo; exit 1' INT TERM HUP
+  fi
   while :; do
-    printf '%s' "Paste the secret for $name: "
-    stty -echo
+    if [ "$tty_stdin" = true ]; then
+      printf '%s' "Paste the secret for $name: "
+      stty -echo
+    fi
     if ! read -r token; then
       # Not a cancel path (Ctrl-C skips this entirely, see above). This
       # is EOF/closed stdin (e.g. run non-interactively), where retrying
       # would just spin forever re-reading nothing.
-      stty echo
-      echo
+      if [ "$tty_stdin" = true ]; then
+        stty echo
+        echo
+      fi
       echo "No more input; giving up." >&2
       exit 1
     fi
-    stty echo
-    echo
+    if [ "$tty_stdin" = true ]; then
+      stty echo
+      echo
+    fi
     if [ "${#token}" -ge "$min_length" ]; then
       break
     fi
-    echo "That's only ${#token} character(s): doesn't look like a real secret. Try again (Ctrl-C to cancel)." >&2
+    echo "That's only ${#token} character(s): doesn't look like a real secret." >&2
+    if [ "$tty_stdin" = false ]; then
+      echo "stdin isn't a terminal, so there's nothing left to retry with; giving up." >&2
+      exit 1
+    fi
+    echo "Try again (Ctrl-C to cancel)." >&2
   done
-  trap - EXIT INT TERM HUP
+  if [ "$tty_stdin" = true ]; then
+    trap - EXIT INT TERM HUP
+  fi
   echo "(Received ${#token} characters.)"
 
   if secret_exists "$name"; then
