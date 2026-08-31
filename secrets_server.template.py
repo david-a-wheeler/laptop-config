@@ -155,20 +155,11 @@ def _keychain_exists(service_name: str) -> bool:
 
 
 def _locked_then_unlocked(name: str, vm_hostname: str, lookup):
-  """Tries `lookup` against the VM-locked service name first (if
-  vm_hostname is set), falling back to the unlocked name if that lookup
-  is falsy. This is the entire VM-locking mechanism: a secret stored
-  ONLY under its locked name is invisible to every other VM (a request
-  from elsewhere just doesn't find it, indistinguishable from "no secret
-  by that name"), while a secret stored only unlocked works for any VM
-  as before. Don't store both a locked and an unlocked copy of the same
-  name unless you actually want that fallback; see host-secrets.sh.
-
-  Shared by get_secret_from_keychain (lookup=_keychain_read) and
-  keychain_secret_exists (lookup=_keychain_exists): same fallback shape,
-  different underlying Keychain call, so a dry-run request (which only
-  ever calls keychain_secret_exists) still never invokes _keychain_read,
-  and so never reads an actual secret value.
+  """Tries `lookup` on the VM-locked name first, falling back to the
+  unlocked name: the entire VM-locking mechanism (see host-secrets.sh).
+  Parameterized on `lookup` so dry-run's keychain_secret_exists can
+  share this without ever calling _keychain_read, i.e. without ever
+  reading a real secret's value.
   """
   if vm_hostname:
     locked = lookup(f"{KEYCHAIN_PREFIX}{name}@{vm_hostname}")
@@ -178,19 +169,11 @@ def _locked_then_unlocked(name: str, vm_hostname: str, lookup):
 
 
 def get_secret_from_keychain(name: str, vm_hostname: str) -> str:
-  """Retrieves a named secret from Keychain, applying KEYCHAIN_PREFIX; see
-  _locked_then_unlocked for the VM-locking fallback this implements.
-  """
   return _locked_then_unlocked(name, vm_hostname, _keychain_read)
 
 
 def keychain_secret_exists(name: str, vm_hostname: str) -> bool:
-  """Checks whether get_secret_from_keychain(name, vm_hostname) would find
-  something, without reading its value. Used for dry-run requests, so
-  testing connectivity or the approval flow can never actually pull a real
-  secret out of Keychain: there's nothing to accidentally print, because
-  nothing sensitive was ever read in the first place.
-  """
+  """Like get_secret_from_keychain, but never reads the secret's value."""
   return bool(_locked_then_unlocked(name, vm_hostname, _keychain_exists))
 
 
@@ -402,13 +385,9 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
     )
 
   def _run_dialog(self, applescript: str, stderr_event: str) -> str:
-    """Runs one AppleScript "display dialog" command, returning its
-    stdout (e.g. "button returned:Authorize"). Shared by
-    _show_approval_dialog and _show_alert_dialog: same
-    run-osascript-and-log-stderr mechanics, different dialog shape/
-    buttons. Logs a warning under stderr_event if osascript itself
-    produced stderr output; that's how a dialog that failed to display
-    (as opposed to a real button click) shows up.
+    """Runs one AppleScript "display dialog", returning its stdout (e.g.
+    "button returned:Authorize"). Logs stderr_event if osascript itself
+    produced stderr (a dialog that failed to display, not a real click).
     """
     res = subprocess.run(
         ["osascript", "-e", applescript], capture_output=True, text=True
@@ -419,16 +398,10 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
 
   def _show_approval_dialog(self, prompt_text: str,
                              title: str = "Secrets Server Gatekeeper") -> bool:
-    """Shows the AppleScript approval dialog; returns whether Authorize was
-    clicked. Shared by the real and dry-run paths so there's exactly one
-    place that builds this particular dialog. Defaults to Authorize (a
-    bare Enter approves) rather than Deny: this dialog only ever fires
-    for a request carrying a live LAPTOP_CONFIG_AUTH_SESSION, which
-    noclaude() strips before an AI agent ever gets near it (see
-    vm-bash-aliases-block.template.sh), so in practice it's gating routine
-    human operations, not an adversarial AI. A dialog you have to read
-    the button label on every single request is worse than the marginal
-    security value of "wrong button by default."
+    """Defaults to Authorize (bare Enter approves): only ever fires for a
+    request with a live LAPTOP_CONFIG_AUTH_SESSION, which noclaude()
+    strips before an AI agent gets near it, so this gates routine human
+    operations, not an adversarial AI.
     """
     applescript = (
         f'display dialog "{prompt_text}" with title'
@@ -439,14 +412,8 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
     return "button returned:Authorize" in stdout
 
   def _show_alert_dialog(self, text: str) -> None:
-    """Shows an informational, single-button AppleScript alert, not an
-    approve/deny choice, since the caller has already decided to deny the
-    request regardless of what gets clicked here. Used only for requests
-    rejected as outright invalid/suspicious (see secret_name_contains_at)
-    rather than the normal "secret not found" or "user said no" paths, so
-    a human notices something odd happened instead of it passing as a
-    routine denial. Failures here (osascript missing, no GUI session) are
-    logged but never escalate; the request was already denied either way.
+    """Single-button alert for a request already denied as outright
+    invalid (see secret_name_contains_at); not an approve/deny choice.
     """
     applescript = (
         f'display dialog "{text}" with title "Secrets Server Alert" '
