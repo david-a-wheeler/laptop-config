@@ -51,7 +51,7 @@ import re
 import socket
 import subprocess
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LISTEN_PORT = @@SECRETS_SERVER_PORT@@
 KEYCHAIN_PREFIX = "@@KEYCHAIN_PREFIX@@"
@@ -455,10 +455,21 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
     pass
 
 
+class SecretsHTTPServer(ThreadingHTTPServer):
+  # Each connection (each dialog) runs on its own thread, so one VM's
+  # pending approval no longer makes a second, unrelated request queue
+  # behind it. daemon_threads=True so a request thread stuck waiting on
+  # an unanswered dialog can never block process shutdown (launchctl
+  # stop/restart, Ctrl-C): the thread is simply abandoned when the main
+  # process exits, same as it would be if left as an orphaned dialog
+  # today.
+  daemon_threads = True
+
+
 def main():
   listen_host = get_virtual_bridge_ip()
   log_event("info", "startup", listen_host=listen_host, listen_port=LISTEN_PORT)
-  server = HTTPServer((listen_host, LISTEN_PORT), SecretsRequestHandler)
+  server = SecretsHTTPServer((listen_host, LISTEN_PORT), SecretsRequestHandler)
   try:
     server.serve_forever()
   except KeyboardInterrupt:

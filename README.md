@@ -111,12 +111,14 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   `~/.netrc`), since a fresh one gets minted every time and the old one
   would otherwise stay valid.
 - `vm-setup.sh`: Ubuntu VM setup.
-- `vm-git-helper.template.py`: the VM-side git credential helper that talks
-  to `secrets_server.py`.
+- `vm-git-helper.template.py`: the VM-side git credential helper. Only
+  speaks git's own stdin/stdout format; delegates the actual
+  `secrets_server.py` request to `secrets-client.py` below rather than
+  implementing that protocol itself.
 - `secrets-client.template.py`: generic VM-side CLI for fetching any named
-  secret from `secrets_server.py` (`secrets-client.py get <name>`), the
-  same protocol `vm-git-helper.py` speaks, without git's credential-helper
-  format. `secret_session` (below) is the generic non-git caller.
+  secret from `secrets_server.py` (`secrets-client.py get <name>`), without
+  git's credential-helper-specific format. `vm-git-helper.py` and
+  `secret_session` (below) are both callers.
 - `nftables.template.conf`: VM egress firewall ruleset.
 - `vm-bash-aliases-block.template.sh`: the managed block installed into each
   VM's `~/.bash_aliases`: editor, `LAPTOP_CONFIG_AUTH_SESSION`, the

@@ -177,6 +177,10 @@ else
 fi
 
 echo "== Installing vm-git-helper (git credential helper) =="
+# At runtime this shells out to secrets-client.py (installed just below),
+# rather than speaking to secrets_server.py directly; install order here
+# doesn't matter, since git never invokes this until well after
+# vm-setup.sh has finished and both files exist.
 git_secrets_py_dict="{"
 first=1
 for pair in $GIT_SECRETS; do
@@ -191,7 +195,7 @@ done
 git_secrets_py_dict="${git_secrets_py_dict}}"
 GIT_SECRETS_PY_DICT="$git_secrets_py_dict"
 render_template "$SCRIPT_DIR/vm-git-helper.template.py" /tmp/vm-git-helper.py.rendered \
-  SECRETS_SERVER_PORT GIT_SECRETS_PY_DICT
+  GIT_SECRETS_PY_DICT
 sudo cp /tmp/vm-git-helper.py.rendered /usr/local/bin/vm-git-helper.py
 sudo chmod +x /usr/local/bin/vm-git-helper.py
 rm -f /tmp/vm-git-helper.py.rendered

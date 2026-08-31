@@ -55,7 +55,7 @@ if ! shellcheck -x -s bash "$tmp/bash-aliases.sh"; then
 fi
 
 GIT_SECRETS_PY_DICT='{"github.com": "GH_TOKEN"}'
-render_template vm-git-helper.template.py "$tmp/vm-git-helper.py" SECRETS_SERVER_PORT GIT_SECRETS_PY_DICT
+render_template vm-git-helper.template.py "$tmp/vm-git-helper.py" GIT_SECRETS_PY_DICT
 render_template secrets-client.template.py "$tmp/secrets-client.py" SECRETS_SERVER_PORT
 render_template secrets_server.template.py "$tmp/secrets_server.py" \
   SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL
