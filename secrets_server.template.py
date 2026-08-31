@@ -154,23 +154,34 @@ def _keychain_exists(service_name: str) -> bool:
   ).returncode == 0
 
 
-def get_secret_from_keychain(name: str, vm_hostname: str) -> str:
-  """Retrieves a named secret from Keychain, applying KEYCHAIN_PREFIX.
-
-  If vm_hostname is set, tries the VM-locked variant ("<prefix><name>@
-  <vm_hostname>") first, falling back to the unlocked "<prefix><name>" if
-  that's not found. This is the entire VM-locking mechanism: a secret
-  stored ONLY under its locked name is invisible to every other VM (a
-  request from elsewhere just doesn't find it, indistinguishable from "no
-  secret by that name"), while a secret stored only unlocked works for any
-  VM as before. Don't store both a locked and an unlocked copy of the same
+def _locked_then_unlocked(name: str, vm_hostname: str, lookup):
+  """Tries `lookup` against the VM-locked service name first (if
+  vm_hostname is set), falling back to the unlocked name if that lookup
+  is falsy. This is the entire VM-locking mechanism: a secret stored
+  ONLY under its locked name is invisible to every other VM (a request
+  from elsewhere just doesn't find it, indistinguishable from "no secret
+  by that name"), while a secret stored only unlocked works for any VM
+  as before. Don't store both a locked and an unlocked copy of the same
   name unless you actually want that fallback; see host-secrets.sh.
+
+  Shared by get_secret_from_keychain (lookup=_keychain_read) and
+  keychain_secret_exists (lookup=_keychain_exists): same fallback shape,
+  different underlying Keychain call, so a dry-run request (which only
+  ever calls keychain_secret_exists) still never invokes _keychain_read,
+  and so never reads an actual secret value.
   """
   if vm_hostname:
-    locked = _keychain_read(f"{KEYCHAIN_PREFIX}{name}@{vm_hostname}")
+    locked = lookup(f"{KEYCHAIN_PREFIX}{name}@{vm_hostname}")
     if locked:
       return locked
-  return _keychain_read(f"{KEYCHAIN_PREFIX}{name}")
+  return lookup(f"{KEYCHAIN_PREFIX}{name}")
+
+
+def get_secret_from_keychain(name: str, vm_hostname: str) -> str:
+  """Retrieves a named secret from Keychain, applying KEYCHAIN_PREFIX; see
+  _locked_then_unlocked for the VM-locking fallback this implements.
+  """
+  return _locked_then_unlocked(name, vm_hostname, _keychain_read)
 
 
 def keychain_secret_exists(name: str, vm_hostname: str) -> bool:
@@ -180,9 +191,7 @@ def keychain_secret_exists(name: str, vm_hostname: str) -> bool:
   secret out of Keychain: there's nothing to accidentally print, because
   nothing sensitive was ever read in the first place.
   """
-  if vm_hostname and _keychain_exists(f"{KEYCHAIN_PREFIX}{name}@{vm_hostname}"):
-    return True
-  return _keychain_exists(f"{KEYCHAIN_PREFIX}{name}")
+  return bool(_locked_then_unlocked(name, vm_hostname, _keychain_exists))
 
 
 def _applescript_escape(s: str) -> str:
@@ -392,35 +401,42 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
         200 if approved else 403,
     )
 
+  def _run_dialog(self, applescript: str, stderr_event: str) -> str:
+    """Runs one AppleScript "display dialog" command, returning its
+    stdout (e.g. "button returned:Authorize"). Shared by
+    _show_approval_dialog and _show_alert_dialog: same
+    run-osascript-and-log-stderr mechanics, different dialog shape/
+    buttons. Logs a warning under stderr_event if osascript itself
+    produced stderr output; that's how a dialog that failed to display
+    (as opposed to a real button click) shows up.
+    """
+    res = subprocess.run(
+        ["osascript", "-e", applescript], capture_output=True, text=True
+    )
+    if res.stderr.strip():
+      log_event("warning", stderr_event, detail=res.stderr.strip())
+    return res.stdout
+
   def _show_approval_dialog(self, prompt_text: str,
                              title: str = "Secrets Server Gatekeeper") -> bool:
     """Shows the AppleScript approval dialog; returns whether Authorize was
     clicked. Shared by the real and dry-run paths so there's exactly one
-    place that builds and runs the osascript command. Defaults to
-    Authorize (a bare Enter approves) rather than Deny: this dialog only
-    ever fires for a request carrying a live LAPTOP_CONFIG_AUTH_SESSION, which
+    place that builds this particular dialog. Defaults to Authorize (a
+    bare Enter approves) rather than Deny: this dialog only ever fires
+    for a request carrying a live LAPTOP_CONFIG_AUTH_SESSION, which
     noclaude() strips before an AI agent ever gets near it (see
     vm-bash-aliases-block.template.sh), so in practice it's gating routine
     human operations, not an adversarial AI. A dialog you have to read
     the button label on every single request is worse than the marginal
-    security value of "wrong button by default." Logs a warning if
-    osascript itself produced stderr output; that's how a dialog that
-    failed to display (as opposed to a real Deny click) shows up.
+    security value of "wrong button by default."
     """
     applescript = (
         f'display dialog "{prompt_text}" with title'
         f' "{_applescript_escape(title)}"'
         ' buttons {"Deny", "Authorize"} default button "Authorize"'
     )
-    res = subprocess.run(
-        ["osascript", "-e", applescript], capture_output=True, text=True
-    )
-    if res.stderr.strip():
-      log_event(
-          "warning", "approval_dialog_stderr",
-          detail=res.stderr.strip(),
-      )
-    return "button returned:Authorize" in res.stdout
+    stdout = self._run_dialog(applescript, "approval_dialog_stderr")
+    return "button returned:Authorize" in stdout
 
   def _show_alert_dialog(self, text: str) -> None:
     """Shows an informational, single-button AppleScript alert, not an
@@ -436,11 +452,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
         f'display dialog "{text}" with title "Secrets Server Alert" '
         'buttons {"OK"} default button "OK"'
     )
-    res = subprocess.run(
-        ["osascript", "-e", applescript], capture_output=True, text=True
-    )
-    if res.stderr.strip():
-      log_event("warning", "alert_dialog_stderr", detail=res.stderr.strip())
+    self._run_dialog(applescript, "alert_dialog_stderr")
 
   def _respond(self, data, code=200):
     self.send_response(code)
