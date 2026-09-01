@@ -1,7 +1,8 @@
 # bulkhead
 
-Setup for my macOS host + Ubuntu VM (UTM) setup for running AI
-coding agents safely. See [architecture.md](architecture.md) for the why.
+Setup for a host + guest VM setup for running AI coding agents safely.
+Currently supported: macOS host, Ubuntu Linux guest (via UTM). See
+[architecture.md](architecture.md) for the why.
 
 ## Usage
 
@@ -39,9 +40,9 @@ A few pieces depend on each other, so the first pass needs this order:
    same secret; see architecture.md's Secrets Server section).
 
 After that: `ssh lftux`/`scp x lftux:` works from the host, and a human
-shell's `git push`/`git fetch` on a VM triggers a macOS approval dialog and
-succeeds; the same command run via `noclaude` fails immediately instead
-(see architecture.md's Secrets Server section).
+shell's `git push`/`git fetch` on a VM triggers a host approval prompt (a
+macOS dialog today) and succeeds; the same command run via `noclaude`
+fails immediately instead (see architecture.md's Secrets Server section).
 
 Want Heroku access from a VM too? `./rotate-heroku-key.sh` (set
 `config.sh`'s `HEROKU_API_KEY_VM` first to lock it to one VM), then
@@ -80,7 +81,13 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
 - `common.sh`: shared shell functions (`host-setup.sh`/`vm-setup.sh` source
   it): template rendering, idempotent block-insertion into dotfiles, git
   config niceties, and a "don't clobber a locally-edited file" install helper.
-- `host-setup.sh`: macOS host setup.
+- `host-backend.sh`: the host-side calls that are specific to *how* this
+  host stores secrets and enumerates guests (`store_secret`,
+  `retrieve_secret`, `secret_exists`, `delete_secret`, `enumerate_guests`),
+  named after what they do rather than how. Today there's exactly one
+  implementation of each (macOS Keychain, UTM's `utmctl`); see
+  architecture.md's "Currently supported" note.
+- `host-setup.sh`: host setup (macOS today).
 - `secrets-server.template.py`, `com.user.secretsserver.template.plist`:
   the host-side secrets server (see architecture.md) and its LaunchAgent.
   Serves any secret `host-secrets.sh` has stored under Keychain's
@@ -118,7 +125,7 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   authorization for you (via `heroku-session`, so it never touches
   `~/.netrc`), since a fresh one gets minted every time and the old one
   would otherwise stay valid.
-- `vm-setup.sh`: Ubuntu VM setup.
+- `vm-setup.sh`: guest VM setup (Ubuntu today).
 - `vm-git-helper`: the VM-side git credential helper. Plain file, not a
   template: git invokes it as `vm-git-helper NAME get|store|erase`, with
   `NAME` baked into a `credential.<url>.helper` config line per host by

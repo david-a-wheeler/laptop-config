@@ -17,6 +17,7 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/config.sh"
 . "$SCRIPT_DIR/common.sh"
+. "$SCRIPT_DIR/host-backend.sh"
 
 # This script is macOS-only for now. Real incident: this got run on an
 # Ubuntu VM by mistake, and its Mac-specific checks further down produced
@@ -109,38 +110,26 @@ if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
   ssh-keygen -t ed25519 -N "" -f "$HOME/.ssh/id_ed25519" -C "bulkhead host->VM access"
 fi
 
-echo "== Configuring SSH access to VMs (~/.ssh/config + authorized_keys, via utmctl) =="
-# Ask utmctl (UTM's own CLI, already installed with the app) which VMs are
+echo "== Configuring SSH access to guests (~/.ssh/config + authorized_keys) =="
+# enumerate_guests (host-backend.sh) asks the hypervisor which guests are
 # running and what IP each one currently has, rather than maintaining a
-# manual name->IP list: nothing to update here as VMs are added, removed,
-# renamed, or just get a new DHCP lease. `utmctl list`'s output is a
-# fixed-format table (UUID, Status, Name); we only look at started VMs,
-# since a stopped one has no guest agent to answer `ip-address` anyway.
-# `ip-address` lists IPv4 addresses before any IPv6 ones, so the first line
-# is what we want (see `utmctl help ip-address`).
+# manual name->IP list: nothing to update here as guests are added,
+# removed, renamed, or just get a new DHCP lease.
 #
-# ssh-copy-id installs the key from above on each VM using its normal login
-# password (typed interactively): standard, boring, and it needs nothing
-# from this repo or from vm-setup.sh. It's also already idempotent: once a
-# VM has the key, ssh-copy-id authenticates with it directly and skips
-# re-adding it, no password needed on later runs. accept-new avoids an
-# unexpected host-key prompt on a VM's first-ever connection; a rejected or
-# unreachable VM only warns, so one bad VM can't stop the others or the
-# rest of this script.
-if [ -x "$UTMCTL" ]; then
-  # Capture "utmctl list"'s own exit status separately before piping its
-  # output onward: a pipeline's exit status in POSIX sh is the *last*
-  # command's (no "pipefail" here), so "utmctl list | awk | while" would
-  # otherwise silently swallow a failure here (UTM not running, etc.)
-  # instead of warning about it.
-  if utm_list_output="$("$UTMCTL" list 2>&1)"; then
-    ssh_config_block="$(mktemp)"
-    printf '%s\n' "$utm_list_output" \
-      | awk 'NR > 1 && $2 == "started" { print $NF }' \
-      | while IFS= read -r vm_name; do
-          vm_ip="$("$UTMCTL" ip-address "$vm_name" 2>/dev/null | head -1)"
-          if [ -n "$vm_ip" ]; then
-            cat <<HOSTBLOCK >> "$ssh_config_block"
+# ssh-copy-id installs the key from above on each guest using its normal
+# login password (typed interactively): standard, boring, and it needs
+# nothing from this repo or from vm-setup.sh. It's also already
+# idempotent: once a guest has the key, ssh-copy-id authenticates with it
+# directly and skips re-adding it, no password needed on later runs.
+# accept-new avoids an unexpected host-key prompt on a guest's first-ever
+# connection; a rejected or unreachable guest only warns, so one bad guest
+# can't stop the others or the rest of this script.
+if guests_output="$(enumerate_guests)"; then
+  ssh_config_block="$(mktemp)"
+  printf '%s\n' "$guests_output" \
+    | while IFS=' ' read -r vm_name vm_ip; do
+        [ -n "$vm_name" ] || continue
+        cat <<HOSTBLOCK >> "$ssh_config_block"
 Host $vm_name
     HostName $vm_ip
     User $VM_USER
@@ -148,21 +137,16 @@ Host $vm_name
     IdentitiesOnly yes
 
 HOSTBLOCK
-            if ! ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" \
-                 -o StrictHostKeyChecking=accept-new "$VM_USER@$vm_ip"; then
-              echo "WARNING: couldn't copy the host's SSH key to $vm_name ($vm_ip); 'ssh $vm_name' will need a password until this succeeds." >&2
-            fi
-          fi
-        done
-    install_managed_block "$ssh_config_block" "$HOME/.ssh/config"
-    chmod 600 "$HOME/.ssh/config"
-    rm -f "$ssh_config_block"
-  else
-    echo "WARNING: 'utmctl list' failed; skipping ~/.ssh/config setup:" >&2
-    echo "$utm_list_output" >&2
-  fi
+        if ! ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" \
+             -o StrictHostKeyChecking=accept-new "$VM_USER@$vm_ip"; then
+          echo "WARNING: couldn't copy the host's SSH key to $vm_name ($vm_ip); 'ssh $vm_name' will need a password until this succeeds." >&2
+        fi
+      done
+  install_managed_block "$ssh_config_block" "$HOME/.ssh/config"
+  chmod 600 "$HOME/.ssh/config"
+  rm -f "$ssh_config_block"
 else
-  echo "WARNING: utmctl not found at $UTMCTL; skipping ~/.ssh/config setup. Check UTMCTL in config.sh." >&2
+  echo "WARNING: couldn't enumerate guests (utmctl missing, or 'utmctl list' failed); skipping ~/.ssh/config setup. Check UTMCTL in config.sh." >&2
 fi
 
 if ! confirmation_done battery; then

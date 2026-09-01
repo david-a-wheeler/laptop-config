@@ -18,6 +18,7 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/config.sh"
 . "$SCRIPT_DIR/common.sh"
+. "$SCRIPT_DIR/host-backend.sh"
 
 # Host-only (Keychain via "security" doesn't exist on Linux).
 macos_only "host-secrets.sh"
@@ -34,12 +35,14 @@ EOF
   exit 1
 }
 
-# Every Keychain-touching function below takes a short logical name (the
-# same one you'd pass on the command line, "@vm-hostname" suffix and all)
-# and applies KEYCHAIN_PREFIX itself: callers never need to think about
-# the prefix.
-secret_exists() {
-  security find-generic-password -s "${KEYCHAIN_PREFIX}$1" >/dev/null 2>&1
+# Every function below takes a short logical name (the same one you'd pass
+# on the command line, "@vm-hostname" suffix and all), applies
+# KEYCHAIN_PREFIX itself, and calls through to host-backend.sh's
+# storage-agnostic seam (store_secret/retrieve_secret/secret_exists/
+# delete_secret): callers never need to think about the prefix or about
+# which backend actually holds the secret.
+named_secret_exists() {
+  secret_exists "${KEYCHAIN_PREFIX}$1"
 }
 
 cmd_list() {
@@ -66,13 +69,13 @@ cmd_list() {
 }
 
 cmd_get() {
-  security find-generic-password -s "${KEYCHAIN_PREFIX}$1" -w
+  retrieve_secret "${KEYCHAIN_PREFIX}$1"
 }
 
 cmd_set() {
   name="$1"
   existed=false
-  secret_exists "$name" && existed=true
+  named_secret_exists "$name" && existed=true
   min_length=9
   if [ -t 0 ]; then
     # Interactive: mask input, retry on a too-short paste. A bare Enter
@@ -113,19 +116,19 @@ cmd_set() {
     fi
     [ "${#token}" -ge "$min_length" ] || { echo "Secret too short (${#token} chars)." >&2; exit 1; }
   fi
-  # -U updates the existing item in place instead of erroring on a
-  # duplicate; no separate delete step needed.
-  security add-generic-password -U -a "$USER" -s "${KEYCHAIN_PREFIX}${name}" -w "$token"
+  # store_secret updates an existing item in place instead of erroring on
+  # a duplicate; no separate delete step needed.
+  store_secret "${KEYCHAIN_PREFIX}${name}" "$token"
   echo "Stored $name in Keychain."
 }
 
 cmd_delete() {
   name="$1"
-  if ! secret_exists "$name"; then
+  if ! named_secret_exists "$name"; then
     echo "$name isn't in Keychain; nothing to delete."
     return 0
   fi
-  security delete-generic-password -s "${KEYCHAIN_PREFIX}${name}" >/dev/null 2>&1
+  delete_secret "${KEYCHAIN_PREFIX}${name}"
 }
 
 [ $# -ge 1 ] || usage

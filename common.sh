@@ -2,7 +2,8 @@
 # common.sh: shell functions shared by host-setup.sh and vm-setup.sh.
 # Sourced only (no shebang needed): must stay POSIX sh, since it's sourced
 # by both host-setup.sh/host-secrets.sh (macOS) and vm-setup.sh (Ubuntu's
-# dash).
+# dash). Host-only, OS-specific functions (Keychain, utmctl) live in
+# host-backend.sh instead, not here, since vm-setup.sh has no use for them.
 #
 # Source this after config.sh:
 #   . "$(dirname "$0")/config.sh"

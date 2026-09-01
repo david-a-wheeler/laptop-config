@@ -73,7 +73,7 @@ class VmLockFallbackTests(unittest.TestCase):
       calls.append(name)
       return "SECRET" if name == "bulkhead-heroku-api-key@lftux" else ""
 
-    self.server._keychain_read = fake_read
+    self.server.retrieve_secret = fake_read
     result = self.server.get_secret_from_keychain("heroku-api-key", "lftux")
     self.assertEqual(result, "SECRET")
     # Tries the more-specific locked+no-confirmation variant first (not
@@ -88,7 +88,7 @@ class VmLockFallbackTests(unittest.TestCase):
     def fake_read(name):
       return "SECRET" if name == "bulkhead-heroku-api-key" else ""
 
-    self.server._keychain_read = fake_read
+    self.server.retrieve_secret = fake_read
     result = self.server.get_secret_from_keychain("heroku-api-key", "lftux")
     self.assertEqual(result, "SECRET")
 
@@ -99,7 +99,7 @@ class VmLockFallbackTests(unittest.TestCase):
       calls.append(name)
       return "SECRET" if name == "bulkhead-heroku-api-key" else ""
 
-    self.server._keychain_read = fake_read
+    self.server.retrieve_secret = fake_read
     result = self.server.get_secret_from_keychain("heroku-api-key", "")
     self.assertEqual(result, "SECRET")
     # No vm_hostname: only the two unlocked tiers are tried; no "@"
@@ -110,7 +110,7 @@ class VmLockFallbackTests(unittest.TestCase):
     ])
 
   def test_not_found_anywhere_returns_empty(self):
-    self.server._keychain_read = lambda name: ""
+    self.server.retrieve_secret = lambda name: ""
     result = self.server.get_secret_from_keychain("nonexistent", "lftux")
     self.assertEqual(result, "")
 
@@ -126,29 +126,29 @@ class NoConfirmationNamingTests(unittest.TestCase):
     self.server = load_secrets_server()
 
   def test_unlocked_bang_skips_confirmation(self):
-    self.server._keychain_exists = (
+    self.server.secret_exists = (
         lambda name: name == "bulkhead-GH_PUBLIC_TOKEN!"
     )
     self.assertFalse(self.server.needs_confirmation("GH_PUBLIC_TOKEN", ""))
 
   def test_plain_name_requires_confirmation(self):
-    self.server._keychain_exists = lambda name: name == "bulkhead-GH_TOKEN"
+    self.server.secret_exists = lambda name: name == "bulkhead-GH_TOKEN"
     self.assertTrue(self.server.needs_confirmation("GH_TOKEN", ""))
 
   def test_locked_bang_skips_confirmation(self):
-    self.server._keychain_exists = (
+    self.server.secret_exists = (
         lambda name: name == "bulkhead-SOME_SECRET@mytux!"
     )
     self.assertFalse(self.server.needs_confirmation("SOME_SECRET", "mytux"))
 
   def test_locked_without_bang_requires_confirmation(self):
-    self.server._keychain_exists = (
+    self.server.secret_exists = (
         lambda name: name == "bulkhead-SOME_SECRET@mytux"
     )
     self.assertTrue(self.server.needs_confirmation("SOME_SECRET", "mytux"))
 
   def test_nothing_stored_defaults_to_requiring_confirmation(self):
-    self.server._keychain_exists = lambda name: False
+    self.server.secret_exists = lambda name: False
     self.assertTrue(self.server.needs_confirmation("NEVER_STORED", ""))
 
 

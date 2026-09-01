@@ -109,22 +109,22 @@ def get_virtual_bridge_ip() -> str:
   return "127.0.0.1"
 
 
-def resolve_vm_hostname(source_ip: str) -> str:
-  """Maps a request's source IP to a running VM's name via utmctl: the
-  same source of truth host-setup.sh already uses to build ~/.ssh/config,
-  so there's no separate credential a VM needs to prove its own identity.
-  Returns "" if it can't be determined (utmctl missing/failed, or no
-  running VM's IP matches); callers then only try the unlocked secret
-  name, exactly as if no VM-locked variant existed for this request.
-  Re-queries utmctl on every call rather than caching: VMs are few enough
-  that the cost is negligible, and a DHCP lease can change between requests.
+def enumerate_guests() -> list[tuple[str, str]]:
+  """Lists (name, ip) for every currently-running guest VM, via UTM's
+  utmctl (already installed with the app). Only lists VMs utmctl reports
+  as "started" with a resolvable IP: a stopped VM has no guest agent to
+  answer "ip-address" anyway. Returns [] if utmctl is missing or fails.
+  This is the one place that knows how to ask the hypervisor which guests
+  exist; a different hypervisor backend would only need to replace this
+  function. See host-backend.sh's shell equivalent, used by host-setup.sh.
   """
   try:
     out = subprocess.check_output(
         [UTMCTL, "list"], text=True, stderr=subprocess.DEVNULL
     )
   except Exception:
-    return ""
+    return []
+  guests = []
   for line in out.splitlines()[1:]:
     fields = line.split()
     if len(fields) < 3 or fields[1] != "started":
@@ -137,12 +137,34 @@ def resolve_vm_hostname(source_ip: str) -> str:
     except Exception:
       continue
     lines = ip_out.strip().splitlines()
-    if lines and lines[0].strip() == source_ip:
+    if lines:
+      guests.append((vm_name, lines[0].strip()))
+  return guests
+
+
+def resolve_vm_hostname(source_ip: str) -> str:
+  """Maps a request's source IP to a running guest's name via
+  enumerate_guests(): the same source of truth host-setup.sh already uses
+  to build ~/.ssh/config, so there's no separate credential a guest needs
+  to prove its own identity. Returns "" if no running guest's IP matches;
+  callers then only try the unlocked secret name, exactly as if no
+  guest-locked variant existed for this request. Re-enumerates on every
+  call rather than caching: guests are few enough that the cost is
+  negligible, and a DHCP lease can change between requests.
+  """
+  for vm_name, ip in enumerate_guests():
+    if ip == source_ip:
       return vm_name
   return ""
 
 
-def _keychain_read(service_name: str) -> str:
+def retrieve_secret(service_name: str) -> str:
+  """Prints-equivalent: returns the secret stored under service_name in
+  macOS Keychain, or "" if it's not stored. This, secret_exists(), and
+  show_approval_prompt() below are this server's only OS-specific calls;
+  see host-backend.sh's shell equivalent (used by host-secrets.sh) for the
+  same idea in the other setup scripts.
+  """
   try:
     return subprocess.check_output(
         [
@@ -159,7 +181,7 @@ def _keychain_read(service_name: str) -> str:
     return ""
 
 
-def _keychain_exists(service_name: str) -> bool:
+def secret_exists(service_name: str) -> bool:
   return subprocess.run(
       ["security", "find-generic-password", "-s", service_name],
       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -184,7 +206,7 @@ def _resolve(name: str, vm_hostname: str, lookup):
   directly in "host-secrets.sh list". The two compose freely: "name@vm!"
   is both locked to one VM and confirmation-free. Parameterized on
   `lookup` so dry-run's keychain_secret_exists can share this without
-  ever calling _keychain_read, i.e. without ever reading a real secret's
+  ever calling retrieve_secret, i.e. without ever reading a real secret's
   value.
   """
   candidates = [(f"{name}!", False), (name, True)]
@@ -199,24 +221,24 @@ def _resolve(name: str, vm_hostname: str, lookup):
 
 
 def get_secret_from_keychain(name: str, vm_hostname: str) -> str:
-  value, _ = _resolve(name, vm_hostname, _keychain_read)
+  value, _ = _resolve(name, vm_hostname, retrieve_secret)
   return value
 
 
 def keychain_secret_exists(name: str, vm_hostname: str) -> bool:
   """Like get_secret_from_keychain, but never reads the secret's value."""
-  found, _ = _resolve(name, vm_hostname, _keychain_exists)
+  found, _ = _resolve(name, vm_hostname, secret_exists)
   return bool(found)
 
 
 def needs_confirmation(name: str, vm_hostname: str) -> bool:
   """Whether releasing this secret needs a human approval dialog; see
   _resolve for what marks a secret as not needing one. Never reads the
-  secret's value (see _keychain_exists). Doesn't affect the session
+  secret's value (see secret_exists). Doesn't affect the session
   check: a no-confirmation secret still requires a real
   BULKHEAD_AUTH_SESSION, only the human click is skipped.
   """
-  _, confirm = _resolve(name, vm_hostname, _keychain_exists)
+  _, confirm = _resolve(name, vm_hostname, secret_exists)
   return confirm
 
 
@@ -355,7 +377,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
           vm=vm_hostname or "unknown", secret_name=secret_name,
           session=session_id[:8], path=repo_path,
       )
-      approved = self._show_approval_dialog(prompt_text)
+      approved = self.show_approval_prompt(prompt_text)
     else:
       log_event(
           "info", "secret_auto_approved", client=client_ip,
@@ -423,7 +445,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
           vm=vm_hostname or "unknown", secret_name=secret_name,
           session=session_id[:8], path=repo_path,
       )
-      approved = self._show_approval_dialog(
+      approved = self.show_approval_prompt(
           prompt_text, title="Secrets Server Gatekeeper (TEST)"
       )
     else:
@@ -450,10 +472,14 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
       log_event("warning", stderr_event, detail=res.stderr.strip())
     return res.stdout
 
-  def _show_approval_dialog(self, prompt_text: str,
-                             title: str = "Secrets Server Gatekeeper") -> bool:
-    """Defaults to Authorize (bare Enter approves): only ever fires for a
-    request with a live BULKHEAD_AUTH_SESSION, which noclaude
+  def show_approval_prompt(self, prompt_text: str,
+                            title: str = "Secrets Server Gatekeeper") -> bool:
+    """Shows the human-approval dialog via AppleScript/osascript: this and
+    _show_alert_dialog below are this server's only other OS-specific call
+    (besides retrieve_secret/secret_exists/enumerate_guests above); a
+    different backend (a non-GUI host, say) would only need to replace
+    this method. Defaults to Authorize (bare Enter approves): only ever
+    fires for a request with a live BULKHEAD_AUTH_SESSION, which noclaude
     strips before an AI agent gets near it, so this gates routine human
     operations, not an adversarial AI.
     """
