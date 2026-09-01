@@ -20,7 +20,7 @@ step() {
 }
 
 # Plain scripts: no @@VAR@@ templating, safe to check as-is.
-PLAIN_SCRIPTS="config.sh common.sh host-setup.sh vm-setup.sh host-secrets.sh rotate-github-pat.sh rotate-heroku-key.sh"
+PLAIN_SCRIPTS="config.sh common.sh host-setup.sh vm-setup.sh host-secrets.sh rotate-github-pat.sh rotate-heroku-key.sh anon_access"
 
 step "shellcheck (plain scripts)"
 # shellcheck disable=SC2086
@@ -58,7 +58,7 @@ GIT_SECRETS_PY_DICT='{"github.com": "GH_TOKEN"}'
 render_template vm-git-helper.template.py "$tmp/vm-git-helper.py" GIT_SECRETS_PY_DICT
 render_template secrets-client.template.py "$tmp/secrets-client.py" SECRETS_SERVER_PORT
 render_template secrets_server.template.py "$tmp/secrets_server.py" \
-  SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL
+  SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL NO_APPROVAL_SECRETS
 for f in vm-git-helper.py secrets-client.py secrets_server.py; do
   if ! python3 -m py_compile "$tmp/$f"; then
     echo "FAILED: $f (py_compile)" >&2

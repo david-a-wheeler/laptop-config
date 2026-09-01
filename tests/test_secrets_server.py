@@ -18,6 +18,7 @@ def load_secrets_server():
       SECRETS_SERVER_PORT="9876",
       KEYCHAIN_PREFIX="laptop-config-",
       UTMCTL="/usr/bin/true",
+      NO_APPROVAL_SECRETS="GH_PUBLIC_TOKEN",
   )
 
 
@@ -93,6 +94,23 @@ class VmLockFallbackTests(unittest.TestCase):
     self.server._keychain_read = lambda name: ""
     result = self.server.get_secret_from_keychain("nonexistent", "lftux")
     self.assertEqual(result, "")
+
+
+class NoApprovalSecretsTests(unittest.TestCase):
+  """needs_confirmation() gates whether do_POST shows a dialog at all;
+  default-safe (True) for anything not explicitly opted out via
+  config.sh's NO_APPROVAL_SECRETS.
+  """
+
+  def setUp(self):
+    self.server = load_secrets_server()
+
+  def test_listed_secret_skips_confirmation(self):
+    self.assertFalse(self.server.needs_confirmation("GH_PUBLIC_TOKEN"))
+
+  def test_unlisted_secret_still_requires_confirmation(self):
+    self.assertTrue(self.server.needs_confirmation("GH_TOKEN"))
+    self.assertTrue(self.server.needs_confirmation("HEROKU_API_KEY"))
 
 
 if __name__ == "__main__":

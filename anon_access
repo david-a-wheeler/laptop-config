@@ -1,0 +1,38 @@
+#!/bin/sh
+# Disable env variables that appear to be auth/login related, so
+# a command (such as an AI invocation) doesn't get them.
+#
+# We specifically list what we'll disable; we don't want to disable auth
+# to use an AI, and we generally *do* want to pass env variables on.
+# Ideally we'd only list "what we should pass on" (clear with env -i and then
+# set specific variables), but that's hard in this case, and this is
+# to simplify use and add defense-in-depth (this is not the only defense).
+#
+# Hints on disabling GitHub access:
+# https://github.com/cli/cli/issues/13307
+# (GH_CONFIG_DIR is set to a useless temp dir, so it has no contents)
+# MUST use all -u FIRST.
+# We leak many empty GH_CONFIG_DIRs but I don't see that as a problem;
+# they'll be cleaned up on startup.
+#
+# gh(1) refuses to run at all without a token, even for public data (see
+# the issue above), so rather than just unsetting GH_TOKEN/GITHUB_TOKEN
+# we replace them with GH_PUBLIC_TOKEN: a separate, low-risk "Public
+# Repositories (read-only)" fine-grained PAT (see rotate-github-pat.sh)
+# that secrets_server.py releases with no confirmation dialog (see
+# config.sh's NO_APPROVAL_SECRETS), since leaking it does no more harm
+# than having no token at all. Fetched here, not inside the sandbox:
+# this script still holds a real LAPTOP_CONFIG_AUTH_SESSION at this
+# point (only the command we exec below loses it), same as
+# heroku_session/gh_session. If the fetch fails for any reason (server
+# unreachable, no session, secret not created yet), gh treats an empty
+# GH_TOKEN exactly like an unset one (confirmed), so this just degrades
+# to today's "gh doesn't work" instead of failing this whole script.
+public_token="$(secrets-client.py get GH_PUBLIC_TOKEN --context "anon_access: ${*:-interactive shell}" 2>/dev/null)" || public_token=""
+
+exec env -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
+    -u SSH_AUTH_SOCK -u HEROKU_API_KEY \
+    -u LAPTOP_CONFIG_AUTH_SESSION \
+    GH_CONFIG_DIR="$(mktemp -d)" \
+    GH_TOKEN="$public_token" GITHUB_TOKEN="$public_token" \
+    "${@:-$SHELL}"

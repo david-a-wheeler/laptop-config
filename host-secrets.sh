@@ -71,19 +71,35 @@ cmd_get() {
 
 cmd_set() {
   name="$1"
+  existed=false
+  secret_exists "$name" && existed=true
   min_length=9
   if [ -t 0 ]; then
-    # Interactive: mask input, retry on a too-short paste. A failing
-    # "read" (Ctrl-D) isn't guarded, so "set -e" exits right here,
-    # still running the EXIT trap below to restore echo.
+    # Interactive: mask input, retry on a too-short paste. A bare Enter
+    # leaves an already-existing secret unchanged (rotating several
+    # secrets in one script run, skipping the ones that haven't actually
+    # expired, is the motivating case); a name that doesn't exist yet has
+    # nothing to "leave unchanged", so empty input there still just
+    # retries like any other too-short paste. A failing "read" (Ctrl-D)
+    # isn't guarded, so "set -e" exits right here, still running the
+    # EXIT trap below to restore echo.
     trap 'stty echo' EXIT
     trap 'stty echo; exit 1' INT TERM HUP
     while :; do
-      printf '%s' "Paste the secret for $name: "
+      if [ "$existed" = true ]; then
+        printf '%s' "Paste the secret for $name (Enter to leave unchanged): "
+      else
+        printf '%s' "Paste the secret for $name: "
+      fi
       stty -echo
       read -r token
       stty echo
       echo
+      if [ -z "$token" ] && [ "$existed" = true ]; then
+        echo "Leaving $name unchanged."
+        trap - EXIT INT TERM HUP
+        return 0
+      fi
       [ "${#token}" -ge "$min_length" ] && break
       echo "Too short (${#token} chars); try again (Ctrl-C to cancel)." >&2
     done
@@ -91,6 +107,10 @@ cmd_set() {
   else
     # Piped: exactly one line, no retrying possible.
     read -r token
+    if [ -z "$token" ] && [ "$existed" = true ]; then
+      echo "Leaving $name unchanged."
+      return 0
+    fi
     [ "${#token}" -ge "$min_length" ] || { echo "Secret too short (${#token} chars)." >&2; exit 1; }
   fi
   # -U updates the existing item in place instead of erroring on a

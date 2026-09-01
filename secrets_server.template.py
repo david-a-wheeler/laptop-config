@@ -56,6 +56,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 LISTEN_PORT = @@SECRETS_SERVER_PORT@@
 KEYCHAIN_PREFIX = "@@KEYCHAIN_PREFIX@@"
 UTMCTL = "@@UTMCTL@@"
+NO_APPROVAL_SECRETS = "@@NO_APPROVAL_SECRETS@@".split()
+
+
+def needs_confirmation(secret_name: str) -> bool:
+  """False for a secret config.sh's NO_APPROVAL_SECRETS explicitly opts
+  out of the dialog for (e.g. GH_PUBLIC_TOKEN); true for everything else,
+  which is the default. Doesn't affect the session check: an opted-out
+  secret still requires a real LAPTOP_CONFIG_AUTH_SESSION, only the
+  human click is skipped.
+  """
+  return secret_name not in NO_APPROVAL_SECRETS
 
 
 def log_event(level: str, event: str, **fields) -> None:
@@ -306,12 +317,20 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
         f"Authorize access for this operation?"
     )
 
-    log_event(
-        "info", "secret_prompt_shown", client=client_ip,
-        vm=vm_hostname or "unknown", secret_name=secret_name,
-        session=session_id[:8], path=repo_path,
-    )
-    approved = self._show_approval_dialog(prompt_text)
+    if needs_confirmation(secret_name):
+      log_event(
+          "info", "secret_prompt_shown", client=client_ip,
+          vm=vm_hostname or "unknown", secret_name=secret_name,
+          session=session_id[:8], path=repo_path,
+      )
+      approved = self._show_approval_dialog(prompt_text)
+    else:
+      log_event(
+          "info", "secret_auto_approved", client=client_ip,
+          vm=vm_hostname or "unknown", secret_name=secret_name,
+          session=session_id[:8], path=repo_path,
+      )
+      approved = True
 
     if approved:
       log_event(
@@ -366,14 +385,17 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
         f"This only tests connectivity and this dialog; nothing is "
         f"released either way."
     )
-    log_event(
-        "info", "secret_dry_run_prompt_shown", client=client_ip,
-        vm=vm_hostname or "unknown", secret_name=secret_name,
-        session=session_id[:8], path=repo_path,
-    )
-    approved = self._show_approval_dialog(
-        prompt_text, title="Secrets Server Gatekeeper (TEST)"
-    )
+    if needs_confirmation(secret_name):
+      log_event(
+          "info", "secret_dry_run_prompt_shown", client=client_ip,
+          vm=vm_hostname or "unknown", secret_name=secret_name,
+          session=session_id[:8], path=repo_path,
+      )
+      approved = self._show_approval_dialog(
+          prompt_text, title="Secrets Server Gatekeeper (TEST)"
+      )
+    else:
+      approved = True
     log_event(
         "info", "secret_dry_run_result", approved=approved, client=client_ip,
         vm=vm_hostname or "unknown", secret_name=secret_name,

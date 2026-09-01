@@ -93,16 +93,20 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   serves. Include `@vm-hostname` in a name to lock that secret to one
   specific VM instead of leaving it available to any of them. `list` shows
   every currently servable secret, scanning Keychain directly rather than
-  relying on a declared list.
-- `rotate-github-pat.sh`: creates a new GitHub PAT and stores it under
-  `GH_TOKEN` in Keychain, without touching `config.sh` or the currently
-  active secret. Safe to run any time (GitHub PATs expire, so expect at
-  least once a year) without risking breaking `git push` mid-rotation. This
-  one secret backs both git's HTTPS auth and `gh` (`gh` reads a token
-  straight out of the `GH_TOKEN`/`GITHUB_TOKEN` env vars, no `gh auth
-  login` involved; see architecture.md's Secrets Server section). See the
-  script's own printed output for how to actually cut over once the new
-  token's confirmed stored.
+  relying on a declared list. `set` accepts a bare Enter to leave an
+  already-existing secret unchanged, so a script rotating several secrets
+  in one run (see `rotate-github-pat.sh`) can skip the ones that haven't
+  actually expired.
+- `rotate-github-pat.sh`: rotates both GitHub PATs this repo stores, one
+  after another: `GH_TOKEN` (backs git's HTTPS auth and `gh`, since `gh`
+  reads a token straight out of the `GH_TOKEN`/`GITHUB_TOKEN` env vars, no
+  `gh auth login` involved) and `GH_PUBLIC_TOKEN` (a "Public Repositories
+  (read-only)" fine-grained PAT `anon_access` uses so `gh` works for a
+  sandboxed AI agent reading public data, without ever handing it real
+  access; see architecture.md's Secrets Server section). Doesn't touch
+  `config.sh` or the currently active secrets, so there's no window where
+  switching too early could break `git push`; press Enter at either
+  prompt to leave that one secret alone if it hasn't actually expired.
 - `rotate-heroku-key.sh`: same idea as `rotate-github-pat.sh`, for
   `HEROKU_API_KEY`. Set `config.sh`'s `HEROKU_API_KEY_VM` to store it
   locked to one VM instead of available to any of them. Once you've
@@ -119,6 +123,17 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   secret from `secrets_server.py` (`secrets-client.py get <name>`), without
   git's credential-helper-specific format. `vm-git-helper.py` and
   `secret_session` (below) are both callers.
+- `anon_access`: strips auth-related env vars (`SSH_AUTH_SOCK`,
+  `LAPTOP_CONFIG_AUTH_SESSION`, `HEROKU_API_KEY`, GitHub Enterprise
+  tokens) before running a command, or an interactive shell if none
+  given; a blocklist, not an allowlist, by design (see the script's own
+  comment for why). Replaces `GH_TOKEN`/`GITHUB_TOKEN` rather than merely
+  unsetting them, with `GH_PUBLIC_TOKEN` fetched from `secrets_server.py`
+  (no confirmation dialog; see config.sh's `NO_APPROVAL_SECRETS`), since
+  `gh` refuses to run at all without some token, even for public data.
+  Part of a move toward small, single-purpose, any-shell-callable files
+  instead of bash-only functions in `vm-bash-aliases-block.template.sh`;
+  not yet installed by `vm-setup.sh` or called from `noclaude()`.
 - `nftables.template.conf`: VM egress firewall ruleset.
 - `vm-bash-aliases-block.template.sh`: the managed block installed into each
   VM's `~/.bash_aliases`: editor, `LAPTOP_CONFIG_AUTH_SESSION`, the

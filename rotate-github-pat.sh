@@ -1,18 +1,19 @@
 #!/bin/sh
-# rotate-github-pat.sh: creates a new GitHub PAT and stores it in Keychain
-# under the name "GH_TOKEN", separately from actually switching the
-# git-auth bridge over to it. Never touches config.sh or the currently
-# active secret; the current setup keeps working unchanged while you run
-# this, so there's no window where switching too early could break git
-# push (real incident: almost happened by renaming config.sh's secret name
-# before the new secret existed under it). GitHub PATs expire, so expect
-# to run this at least once a year, or any time a token needs rotating for
-# another reason (e.g. exposure).
+# rotate-github-pat.sh: rotates both GitHub PATs this repo stores, one
+# after another: GH_TOKEN (a classic PAT, scopes repo+workflow; backs
+# git's HTTPS auth and gh_session) and GH_PUBLIC_TOKEN (a fine-grained
+# PAT scoped to "Public Repositories (read-only)"; backs anon_access, so
+# gh(1) works for a sandboxed AI agent reading public data without ever
+# handing it real access - see config.sh's NO_APPROVAL_SECRETS). Rotated
+# together since both typically expire on the same org-enforced
+# schedule; press Enter at either prompt to leave that one secret
+# unchanged if it hasn't actually expired yet.
 #
-# The name "GH_TOKEN" isn't just cosmetic: it's the same env var gh(1)
-# reads a token from directly (see config.sh's GIT_SECRETS comment), so
-# this one PAT backs both git's HTTPS auth and gh_session, with nothing
-# gh-specific to rotate separately.
+# Never touches config.sh or the currently active secrets; the current
+# setup keeps working unchanged while you run this, so there's no window
+# where switching too early could break git push (real incident: almost
+# happened by renaming config.sh's secret name before the new secret
+# existed under it).
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,26 +23,45 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Host-only (Keychain via "security" doesn't exist on Linux).
 macos_only "rotate-github-pat.sh"
 
-cat <<'EOF'
-== Rotating the GitHub PAT ==
+# $1: secret name (Keychain/env var). $2: token-creation URL. $3: what
+# to actually select on that page. One shared shape (print instructions,
+# open the browser, hand off to host-secrets.sh set, which itself
+# accepts a bare Enter to leave an existing secret unchanged); the two
+# calls below differ only in these three strings.
+rotate_one() {
+  name="$1"
+  url="$2"
+  recipe="$3"
+  cat <<EOF
 
-Create a new token: https://github.com/settings/tokens
-  Generate new token (classic); scopes: repo, workflow.
+== Rotating $name ==
+
+Create a new token: $url
+  $recipe
 EOF
-if command -v open >/dev/null 2>&1; then
-  open "https://github.com/settings/tokens" 2>/dev/null || true
-fi
-echo
+  if command -v open >/dev/null 2>&1; then
+    open "$url" 2>/dev/null || true
+  fi
+  "$SCRIPT_DIR/host-secrets.sh" set "$name"
+}
 
-"$SCRIPT_DIR/host-secrets.sh" set GH_TOKEN
+rotate_one GH_TOKEN \
+  "https://github.com/settings/tokens" \
+  "Generate new token (classic); scopes: repo, workflow."
+
+rotate_one GH_PUBLIC_TOKEN \
+  "https://github.com/settings/personal-access-tokens/new" \
+  "Repository access: Public Repositories (read-only); no permissions needed."
 
 cat <<'EOF'
 
-Stored as "GH_TOKEN". This doesn't switch config.sh over or touch
-any other secret; that's a separate, deliberate step once you've
-confirmed this one works.
+This doesn't switch config.sh over or touch any other secret; that's a
+separate, deliberate step once you've confirmed these work.
 
-Try it: on any VM, "git push"/"git fetch" should now trigger a
-macOS approval dialog and succeed, and "gh_session gh auth status"
-should trigger one dialog and report the token's scopes.
+Try it: on any VM, "git push"/"git fetch" and "gh_session gh auth
+status" exercise GH_TOKEN (one approval dialog each). "anon_access gh
+issue view https://github.com/cli/cli/issues/13307" exercises
+GH_PUBLIC_TOKEN, released with no dialog at all (see config.sh's
+NO_APPROVAL_SECRETS), since anon_access substitutes it for
+GH_TOKEN/GITHUB_TOKEN before a sandboxed agent ever runs.
 EOF

@@ -74,7 +74,7 @@ fi
 echo "== Installing secrets_server.py =="
 mkdir -p "$HOME/bin"
 render_template "$SCRIPT_DIR/secrets_server.template.py" "$HOME/bin/secrets_server.py" \
-  SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL
+  SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL NO_APPROVAL_SECRETS
 chmod +x "$HOME/bin/secrets_server.py"
 # Cleanup from the pre-rename layout (git_host_proxy.py); harmless if
 # these were never present.
