@@ -25,12 +25,12 @@ VM_USER="dwheeler"
 # to read the primary user's home directory. See architecture.md.
 MACOS_INFER_USER="_infer"
 
-# Port the host secrets server (secrets_server.py) listens on, and that
+# Port the host secrets server (secrets-server.py) listens on, and that
 # vm-git-helper.py (and any other VM-side caller) talks to.
 SECRETS_SERVER_PORT="9876"
 
 # Prefix every host-secrets.sh-managed Keychain entry is stored under. This
-# is what marks a secret as servable at all: secrets_server.py only ever
+# is what marks a secret as servable at all: secrets-server.py only ever
 # looks up prefixed names, so "not found" already means "not servable";
 # there's no separate list of allowed secret names to maintain here. Locking
 # a secret to one VM is a further naming convention on top of this: see
@@ -40,7 +40,7 @@ KEYCHAIN_PREFIX="laptop-config-"
 # git host -> logical secret name, space-separated "host:name" pairs.
 # vm-git-helper.py (rendered from vm-git-helper.template.py) looks up the
 # right secret name here for whatever git host it's asked to authenticate,
-# then asks secrets_server.py for it by that short name (KEYCHAIN_PREFIX is
+# then asks secrets-server.py for it by that short name (KEYCHAIN_PREFIX is
 # applied host-side, never sent over the wire). Add an entry here (and run
 # host-secrets.sh set <name> on the host) to bring another git host under
 # the proxy; no script changes needed.
@@ -62,7 +62,7 @@ KEYCHAIN_PREFIX="laptop-config-"
 # GH_PUBLIC_TOKEN (used by anon-access, not listed here since it's not a
 # git host secret) is stored under the name "GH_PUBLIC_TOKEN!", not
 # "GH_PUBLIC_TOKEN": a trailing "!" is what marks a Keychain entry as
-# releasable without a human approval dialog (see secrets_server.template.py's
+# releasable without a human approval dialog (see secrets-server.template.py's
 # _resolve() and host-secrets.sh); every secret defaults to requiring
 # approval, so this only ever happens via a deliberate choice of name at
 # "host-secrets.sh set" time, and "host-secrets.sh list" shows it directly.

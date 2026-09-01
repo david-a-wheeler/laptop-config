@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """VM-side generic secrets-server client.
 
-Fetches one named secret from secrets_server.py on the macOS host, over
+Fetches one named secret from secrets-server.py on the macOS host, over
 the same request/response protocol vm-git-helper.py already speaks (minus
 git's credential-helper-specific stdin/stdout format), as a reusable
 primitive for any VM-side script that needs a host-held secret released
@@ -13,7 +13,7 @@ Usage: secrets-client.py get <name> [--context TEXT]
 Prints the secret to stdout and exits 0 on success; prints an error to
 stderr and exits nonzero otherwise (denied, not found, unreachable). "name"
 is always the short logical name (e.g. "GH_TOKEN", "HEROKU_API_KEY", spelled
-like the environment variable it stands in for wherever one exists); secrets_server.py
+like the environment variable it stands in for wherever one exists); secrets-server.py
 applies KEYCHAIN_PREFIX and any VM-lock suffix itself.
 
 Requires LAPTOP_CONFIG_AUTH_SESSION to be set (see

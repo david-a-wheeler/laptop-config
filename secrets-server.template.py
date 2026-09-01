@@ -8,7 +8,7 @@ caller (vm-git-helper.py or any other VM-side script) names which secret it
 wants via "secret_name" in the request payload; vm-git-helper.py resolves
 that name from config.sh's GIT_SECRETS.
 
-Rendered from secrets_server.template.py by host-setup.sh: edit the
+Rendered from secrets-server.template.py by host-setup.sh: edit the
 template, not the installed copy, since a re-run of host-setup.sh
 overwrites this file.
 
@@ -71,7 +71,7 @@ UTMCTL = "@@UTMCTL@@"
 def log_event(level: str, event: str, **fields) -> None:
   """Writes one JSONL record to stdout and flushes immediately.
 
-  The LaunchAgent redirects stdout to secrets_server.log with no terminal
+  The LaunchAgent redirects stdout to secrets-server.log with no terminal
   attached, and Python fully buffers stdout by default when it's not a
   tty, so lines can sit unwritten until the process exits. flush=True here
   is what makes a log line show up right away instead. Never pass a field

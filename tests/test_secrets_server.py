@@ -1,5 +1,12 @@
-"""Unit tests for secrets_server.template.py. Run via ci.sh, or directly:
+"""Unit tests for secrets-server.template.py. Run via ci.sh, or directly:
   python3 -m unittest discover -s tests -v
+
+This file's own name (and load_secrets_server()'s) keeps the underscore
+"secrets_server" spelling despite the file it tests being renamed to
+secrets-server.template.py: unlike that file (never `import`ed, only
+rendered and exec'd, or run standalone), this one IS a real Python
+module `unittest discover` imports by name, so it has to stay a valid
+identifier - a hyphen isn't legal in one.
 """
 import os
 import sys
@@ -13,7 +20,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def load_secrets_server():
   return render_and_import(
-      os.path.join(REPO_ROOT, "secrets_server.template.py"),
+      os.path.join(REPO_ROOT, "secrets-server.template.py"),
       "secrets_server_under_test",
       SECRETS_SERVER_PORT="9876",
       KEYCHAIN_PREFIX="laptop-config-",

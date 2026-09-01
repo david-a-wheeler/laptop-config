@@ -81,15 +81,15 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   it): template rendering, idempotent block-insertion into dotfiles, git
   config niceties, and a "don't clobber a locally-edited file" install helper.
 - `host-setup.sh`: macOS host setup.
-- `secrets_server.template.py`, `com.user.secretsserver.template.plist`:
+- `secrets-server.template.py`, `com.user.secretsserver.template.plist`:
   the host-side secrets server (see architecture.md) and its LaunchAgent.
   Serves any secret `host-secrets.sh` has stored under Keychain's
   `KEYCHAIN_PREFIX` (`laptop-config-` by default; see `config.sh`); that
   prefix is what marks a secret as servable at all, nothing else to
   declare. Logs one JSONL record per request (approved/denied/errored,
-  never the secret itself) to `/tmp/secrets_server.log`, flushed
+  never the secret itself) to `/tmp/secrets-server.log`, flushed
   immediately; `tail -f` it while diagnosing.
-- `host-secrets.sh`: add/rotate/delete the named secrets `secrets_server.py`
+- `host-secrets.sh`: add/rotate/delete the named secrets `secrets-server.py`
   serves. Include `@vm-hostname` in a name to lock that secret to one
   specific VM instead of leaving it available to any of them; include a
   trailing `!` to mark it as releasable without a human approval dialog
@@ -121,10 +121,10 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
 - `vm-setup.sh`: Ubuntu VM setup.
 - `vm-git-helper.template.py`: the VM-side git credential helper. Only
   speaks git's own stdin/stdout format; delegates the actual
-  `secrets_server.py` request to `secrets-client.py` below rather than
+  `secrets-server.py` request to `secrets-client.py` below rather than
   implementing that protocol itself.
 - `secrets-client.template.py`: generic VM-side CLI for fetching any named
-  secret from `secrets_server.py` (`secrets-client.py get <name>`), without
+  secret from `secrets-server.py` (`secrets-client.py get <name>`), without
   git's credential-helper-specific format. `vm-git-helper.py` and
   `secret_session` (below) are both callers.
 - `anon-access`: strips auth-related env vars (`SSH_AUTH_SOCK`,
@@ -132,7 +132,7 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   tokens) before running a command, or an interactive shell if none
   given; a blocklist, not an allowlist, by design (see the script's own
   comment for why). Replaces `GH_TOKEN`/`GITHUB_TOKEN` rather than merely
-  unsetting them, with `GH_PUBLIC_TOKEN` fetched from `secrets_server.py`
+  unsetting them, with `GH_PUBLIC_TOKEN` fetched from `secrets-server.py`
   (stored as `GH_PUBLIC_TOKEN!`; see `host-secrets.sh`'s trailing-`!`
   no-confirmation naming convention), since `gh` refuses to run at all
   without some token, even for public data.

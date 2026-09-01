@@ -57,9 +57,9 @@ fi
 GIT_SECRETS_PY_DICT='{"github.com": "GH_TOKEN"}'
 render_template vm-git-helper.template.py "$tmp/vm-git-helper.py" GIT_SECRETS_PY_DICT
 render_template secrets-client.template.py "$tmp/secrets-client.py" SECRETS_SERVER_PORT
-render_template secrets_server.template.py "$tmp/secrets_server.py" \
+render_template secrets-server.template.py "$tmp/secrets-server.py" \
   SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL
-for f in vm-git-helper.py secrets-client.py secrets_server.py; do
+for f in vm-git-helper.py secrets-client.py secrets-server.py; do
   if ! python3 -m py_compile "$tmp/$f"; then
     echo "FAILED: $f (py_compile)" >&2
     fail=1

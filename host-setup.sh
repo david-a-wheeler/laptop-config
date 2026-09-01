@@ -71,14 +71,14 @@ EOF
   fi
 fi
 
-echo "== Installing secrets_server.py =="
+echo "== Installing secrets-server.py =="
 mkdir -p "$HOME/bin"
-render_template "$SCRIPT_DIR/secrets_server.template.py" "$HOME/bin/secrets_server.py" \
+render_template "$SCRIPT_DIR/secrets-server.template.py" "$HOME/bin/secrets-server.py" \
   SECRETS_SERVER_PORT KEYCHAIN_PREFIX UTMCTL
-chmod +x "$HOME/bin/secrets_server.py"
-# Cleanup from the pre-rename layout (git_host_proxy.py); harmless if
-# these were never present.
-rm -f "$HOME/bin/git_host_proxy.py"
+chmod +x "$HOME/bin/secrets-server.py"
+# Cleanup from pre-rename layouts (git_host_proxy.py, then
+# secrets_server.py); harmless if these were never present.
+rm -f "$HOME/bin/git_host_proxy.py" "$HOME/bin/secrets_server.py"
 
 echo "== Installing the secrets-server LaunchAgent =="
 mkdir -p "$HOME/Library/LaunchAgents"

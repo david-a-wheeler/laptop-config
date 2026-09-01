@@ -19,8 +19,8 @@
 # the issue above), so rather than just unsetting GH_TOKEN/GITHUB_TOKEN
 # we replace them with GH_PUBLIC_TOKEN: a separate, low-risk "Public
 # Repositories (read-only)" fine-grained PAT stored as "GH_PUBLIC_TOKEN!"
-# (see rotate-github-pat.sh and secrets_server.template.py's _resolve()
-# for what the trailing "!" does), which secrets_server.py releases with
+# (see rotate-github-pat.sh and secrets-server.template.py's _resolve()
+# for what the trailing "!" does), which secrets-server.py releases with
 # no confirmation dialog, since leaking it does no more harm than having
 # no token at all. Fetched here, not inside the sandbox: this script
 # still holds a real LAPTOP_CONFIG_AUTH_SESSION at this point (only the

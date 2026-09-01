@@ -2,13 +2,13 @@
 """Ubuntu VM Git Credential Helper.
 
 Speaks git's credential-helper stdin/stdout format only; the actual
-secrets_server.py request is delegated to secrets-client.py (get
+secrets-server.py request is delegated to secrets-client.py (get
 <name>), the same generic client heroku_session/gh_session already use,
 rather than reimplementing that HTTP call here too. Which secret to ask
 for is resolved from the git host git is asking about (GIT_SECRETS
 below, baked in from config.sh's GIT_SECRETS at install time by
 vm-setup.sh); the name passed to secrets-client.py is always the short,
-unprefixed logical name, since secrets_server.py applies KEYCHAIN_PREFIX
+unprefixed logical name, since secrets-server.py applies KEYCHAIN_PREFIX
 itself. A host with no entry here is refused without ever running
 secrets-client.py, so only git hosts you've deliberately configured are
 handled.

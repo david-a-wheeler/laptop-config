@@ -178,7 +178,7 @@ fi
 
 echo "== Installing vm-git-helper (git credential helper) =="
 # At runtime this shells out to secrets-client.py (installed just below),
-# rather than speaking to secrets_server.py directly; install order here
+# rather than speaking to secrets-server.py directly; install order here
 # doesn't matter, since git never invokes this until well after
 # vm-setup.sh has finished and both files exist.
 git_secrets_py_dict="{"

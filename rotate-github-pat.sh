@@ -6,7 +6,7 @@
 # gh(1) works for a sandboxed AI agent reading public data without ever
 # handing it real access). The trailing "!" is deliberate, not a typo:
 # it's what marks a Keychain entry as releasable with no confirmation
-# dialog (see secrets_server.template.py's _resolve()); everything else
+# dialog (see secrets-server.template.py's _resolve()); everything else
 # defaults to requiring one. Rotated together since both typically
 # expire on the same org-enforced schedule; press Enter at either
 # prompt to leave that one secret unchanged if it hasn't actually

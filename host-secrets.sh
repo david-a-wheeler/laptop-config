@@ -1,5 +1,5 @@
 #!/bin/sh
-# host-secrets.sh: manage the named secrets secrets_server.py serves out of
+# host-secrets.sh: manage the named secrets secrets-server.py serves out of
 # macOS Keychain. Run on the host only; VMs never store secrets.
 # MUST be on MacOS. POSIX sh throughout.
 #
@@ -10,7 +10,7 @@
 #
 # To lock a secret to one specific VM instead of leaving it available to
 # any VM, just append "@<vm-hostname>" as part of the name you give below
-# (e.g. "HEROKU_API_KEY@mytux"). secrets_server.py resolves which VM is
+# (e.g. "HEROKU_API_KEY@mytux"). secrets-server.py resolves which VM is
 # asking and only serves an "@vm"-suffixed name to that VM specifically.
 #
 set -eu
