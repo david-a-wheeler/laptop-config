@@ -1,6 +1,6 @@
 # laptop-config
 
-Idempotent setup for my macOS host + Ubuntu VM (UTM) setup for running AI
+Setup for my macOS host + Ubuntu VM (UTM) setup for running AI
 coding agents safely. See [architecture.md](architecture.md) for the why.
 
 ## Usage
