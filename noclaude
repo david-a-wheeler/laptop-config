@@ -1,4 +1,5 @@
 #!/bin/sh
-# shellcheck disable=SC2046  # word-splitting the --read flags (from
-# config.sh's NONO_EXTRA_READ_PATHS) into separate argv tokens is deliberate.
-exec anon-access nono run --allow . --allow ~/.claude $(cat /usr/local/etc/noclaude-extra-reads 2>/dev/null) -- claude "$@"
+# shellcheck disable=SC2046  # word-splitting noclaude-extra-options'
+# content (currently just --read flags, from config.sh's
+# NONO_EXTRA_READ_PATHS) into separate argv tokens is deliberate.
+exec anon-access nono run --allow . --allow ~/.claude $(cat /usr/local/etc/noclaude-extra-options 2>/dev/null) -- claude "$@"

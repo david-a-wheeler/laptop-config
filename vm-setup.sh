@@ -246,7 +246,7 @@ nono_extra_read_args=""
 for path in $NONO_EXTRA_READ_PATHS; do
   nono_extra_read_args="${nono_extra_read_args}--read ${path} "
 done
-echo "$nono_extra_read_args" | sudo tee /usr/local/etc/noclaude-extra-reads >/dev/null
+echo "$nono_extra_read_args" | sudo tee /usr/local/etc/noclaude-extra-options >/dev/null
 
 echo "== Configuring git niceties =="
 configure_git_niceties

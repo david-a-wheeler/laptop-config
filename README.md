@@ -157,14 +157,14 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   instead of bash-only functions in `vm-bash-aliases-block.sh`; `noclaude`
   below is the first caller.
 - `noclaude`: `exec anon-access nono run --allow . --allow ~/.claude
-  <extra --read flags> -- claude "$@"` - four lines total. Running
+  <extra nono options> -- claude "$@"` - four lines total. Running
   through `anon-access` gets the sandboxed agent every one of its
   protections (see above) for free, rather than `noclaude` maintaining
   its own separate, easy-to-forget-to-update env var list; it also means
   `gh` works for public reads inside the sandbox, same as any other
   `anon-access` caller. The one thing `noclaude` needs from `config.sh`
   (`NONO_EXTRA_READ_PATHS`) is written to a small side file
-  (`/usr/local/etc/noclaude-extra-reads`) by `vm-setup.sh` rather than
+  (`/usr/local/etc/noclaude-extra-options`) by `vm-setup.sh` rather than
   templated into the script, so this file needs no rendering either.
   Plain executable file, not a bash function: any shell can run it.
 - `nftables.template.conf`: VM egress firewall ruleset.
