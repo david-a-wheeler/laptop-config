@@ -29,7 +29,7 @@
 # secret not created yet), gh treats an empty GH_TOKEN exactly like an
 # unset one (confirmed), so this just degrades to today's "gh doesn't
 # work" instead of failing this whole script.
-public_token="$(secrets-client.py get GH_PUBLIC_TOKEN --context "anon_access: ${*:-interactive shell}" 2>/dev/null)" || public_token=""
+public_token="$(secrets-client.py get GH_PUBLIC_TOKEN --context "anon-access: ${*:-interactive shell}" 2>/dev/null)" || public_token=""
 
 exec env -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
     -u SSH_AUTH_SOCK -u HEROKU_API_KEY \

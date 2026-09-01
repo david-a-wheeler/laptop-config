@@ -59,7 +59,7 @@ KEYCHAIN_PREFIX="laptop-config-"
 # token into a single child process's environment instead, the same
 # ephemeral, human-approved pattern as everything else here.
 #
-# GH_PUBLIC_TOKEN (used by anon_access, not listed here since it's not a
+# GH_PUBLIC_TOKEN (used by anon-access, not listed here since it's not a
 # git host secret) is stored under the name "GH_PUBLIC_TOKEN!", not
 # "GH_PUBLIC_TOKEN": a trailing "!" is what marks a Keychain entry as
 # releasable without a human approval dialog (see secrets_server.template.py's

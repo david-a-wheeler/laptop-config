@@ -105,7 +105,7 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   after another: `GH_TOKEN` (backs git's HTTPS auth and `gh`, since `gh`
   reads a token straight out of the `GH_TOKEN`/`GITHUB_TOKEN` env vars, no
   `gh auth login` involved) and `GH_PUBLIC_TOKEN` (a "Public Repositories
-  (read-only)" fine-grained PAT `anon_access` uses so `gh` works for a
+  (read-only)" fine-grained PAT `anon-access` uses so `gh` works for a
   sandboxed AI agent reading public data, without ever handing it real
   access; see architecture.md's Secrets Server section). Doesn't touch
   `config.sh` or the currently active secrets, so there's no window where
@@ -127,7 +127,7 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   secret from `secrets_server.py` (`secrets-client.py get <name>`), without
   git's credential-helper-specific format. `vm-git-helper.py` and
   `secret_session` (below) are both callers.
-- `anon_access`: strips auth-related env vars (`SSH_AUTH_SOCK`,
+- `anon-access`: strips auth-related env vars (`SSH_AUTH_SOCK`,
   `LAPTOP_CONFIG_AUTH_SESSION`, `HEROKU_API_KEY`, GitHub Enterprise
   tokens) before running a command, or an interactive shell if none
   given; a blocklist, not an allowlist, by design (see the script's own
