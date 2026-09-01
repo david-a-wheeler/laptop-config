@@ -54,7 +54,7 @@ rotate_one GH_TOKEN \
 
 rotate_one 'GH_PUBLIC_TOKEN!' \
   "https://github.com/settings/personal-access-tokens/new" \
-  "Repository access: Public Repositories (read-only); no permissions needed."
+  "Generate new token (fine-grained); Repository access: Public Repositories (read-only); no permissions needed."
 
 cat <<'EOF'
 
