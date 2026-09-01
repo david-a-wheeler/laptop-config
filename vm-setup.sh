@@ -80,9 +80,9 @@ sudo apt-get install -y gh
 # This installs the gh binary only; nothing here ever runs "gh auth login".
 # That command persists a long-lived token into this VM (a system keyring
 # if one's running, else a plaintext file), exactly the kind of resident
-# credential this repo's whole design keeps out of VMs. gh_session (see
-# vm-bash-aliases-block.template.sh) gets gh the same GH_TOKEN secret
-# git already uses, ephemerally, per burst of commands, instead.
+# credential this repo's whole design keeps out of VMs. gh-session (see
+# below) gets gh the same GH_TOKEN secret git already uses, ephemerally,
+# per burst of commands, instead.
 
 echo "== Claude Code (native installer) =="
 # Asked once ever (see ask_once in common.sh) when claude isn't already
@@ -177,7 +177,7 @@ else
 fi
 
 echo "== Installing vm-git-helper (git credential helper) =="
-# At runtime this shells out to secrets-client.py (installed just below),
+# At runtime this shells out to secrets-client (installed just below),
 # rather than speaking to secrets-server.py directly; install order here
 # doesn't matter, since git never invokes this until well after
 # vm-setup.sh has finished and both files exist.
@@ -201,12 +201,25 @@ sudo chmod +x /usr/local/bin/vm-git-helper.py
 rm -f /tmp/vm-git-helper.py.rendered
 git config --global credential.helper /usr/local/bin/vm-git-helper.py
 
-echo "== Installing secrets-client (generic secrets-server CLI, used by secret_session) =="
-render_template "$SCRIPT_DIR/secrets-client.template.py" /tmp/secrets-client.py.rendered \
+echo "== Installing secrets-client (generic secrets-server CLI, used by heroku-session/gh-session) =="
+# Installed without a ".py" extension (see secrets-client.template.py):
+# callers shouldn't need to know or care this happens to be Python.
+render_template "$SCRIPT_DIR/secrets-client.template.py" /tmp/secrets-client.rendered \
   SECRETS_SERVER_PORT
-sudo cp /tmp/secrets-client.py.rendered /usr/local/bin/secrets-client.py
-sudo chmod +x /usr/local/bin/secrets-client.py
-rm -f /tmp/secrets-client.py.rendered
+sudo cp /tmp/secrets-client.rendered /usr/local/bin/secrets-client
+sudo chmod +x /usr/local/bin/secrets-client
+rm -f /tmp/secrets-client.rendered
+# Cleanup from the pre-rename layout (secrets-client.py); harmless if
+# never present.
+sudo rm -f /usr/local/bin/secrets-client.py
+
+echo "== Installing heroku-session and gh-session (secrets-client wrappers) =="
+# Plain files, no templating needed: install directly rather than via
+# render_template. Any shell can run these (they're just executables on
+# $PATH), unlike the old bash-function versions removed from
+# vm-bash-aliases-block.template.sh below.
+sudo cp "$SCRIPT_DIR/heroku-session" "$SCRIPT_DIR/gh-session" /usr/local/bin/
+sudo chmod +x /usr/local/bin/heroku-session /usr/local/bin/gh-session
 
 echo "== Configuring git niceties =="
 configure_git_niceties
@@ -217,7 +230,7 @@ if [ "$want_claude" = true ]; then
   install_unless_locally_newer "$SCRIPT_DIR/claude-CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 fi
 
-echo "== Managing ~/.bash_aliases block (editor, LAPTOP_CONFIG_AUTH_SESSION, noclaude, secret_session) =="
+echo "== Managing ~/.bash_aliases block (editor, LAPTOP_CONFIG_AUTH_SESSION, noclaude) =="
 nono_extra_read_args=""
 for path in $NONO_EXTRA_READ_PATHS; do
   nono_extra_read_args="${nono_extra_read_args}--read ${path} "

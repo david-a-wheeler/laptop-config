@@ -1,7 +1,7 @@
 #!/bin/sh
 # rotate-github-pat.sh: rotates both GitHub PATs this repo stores, one
 # after another: GH_TOKEN (a classic PAT, scopes repo+workflow; backs
-# git's HTTPS auth and gh_session) and GH_PUBLIC_TOKEN! (a fine-grained
+# git's HTTPS auth and gh-session) and GH_PUBLIC_TOKEN! (a fine-grained
 # PAT scoped to "Public Repositories (read-only)"; backs anon-access, so
 # gh(1) works for a sandboxed AI agent reading public data without ever
 # handing it real access). The trailing "!" is deliberate, not a typo:
@@ -61,7 +61,7 @@ cat <<'EOF'
 This doesn't switch config.sh over or touch any other secret; that's a
 separate, deliberate step once you've confirmed these work.
 
-Try it: on any VM, "git push"/"git fetch" and "gh_session gh auth
+Try it: on any VM, "git push"/"git fetch" and "gh-session gh auth
 status" exercise GH_TOKEN (one approval dialog each). "anon-access gh
 issue view https://github.com/cli/cli/issues/13307" exercises
 GH_PUBLIC_TOKEN, released with no dialog at all (the trailing "!" on

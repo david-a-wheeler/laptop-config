@@ -45,19 +45,19 @@ KEYCHAIN_PREFIX="laptop-config-"
 # host-secrets.sh set <name> on the host) to bring another git host under
 # the proxy; no script changes needed.
 #
-# Every secret name here (and every name passed to secret_session, see
-# vm-bash-aliases-block.template.sh) is spelled like the environment
-# variable it stands in for, e.g. "GH_TOKEN" rather than "github-pat":
-# that's the same personal access token gh(1) reads from its own
-# GH_TOKEN/GITHUB_TOKEN environment variables (see "gh help environment"),
-# so one Keychain entry backs both git's HTTPS auth (below) and gh's, with
-# no separate token or config for gh to manage. gh's own "gh auth login"
-# is deliberately never used: even with a system keyring available it
-# leaves a long-lived credential resident in the VM (readable by any
-# process in that login session, not just gh), which is exactly what this
-# whole design keeps out of VMs. secret_session GH_TOKEN gets the same
-# token into a single child process's environment instead, the same
-# ephemeral, human-approved pattern as everything else here.
+# Every secret name here (and every name secrets-client takes) is
+# spelled like the environment variable it stands in for, e.g. "GH_TOKEN"
+# rather than "github-pat": that's the same personal access token gh(1)
+# reads from its own GH_TOKEN/GITHUB_TOKEN environment variables (see
+# "gh help environment"), so one Keychain entry backs both git's HTTPS
+# auth (below) and gh's, with no separate token or config for gh to
+# manage. gh's own "gh auth login" is deliberately never used: even with
+# a system keyring available it leaves a long-lived credential resident
+# in the VM (readable by any process in that login session, not just
+# gh), which is exactly what this whole design keeps out of VMs.
+# "gh-session" (a two-line wrapper over "secrets-client GH_TOKEN") gets
+# the same token into a single child process's environment instead, the
+# same ephemeral, human-approved pattern as everything else here.
 #
 # GH_PUBLIC_TOKEN (used by anon-access, not listed here since it's not a
 # git host secret) is stored under the name "GH_PUBLIC_TOKEN!", not
@@ -69,7 +69,7 @@ KEYCHAIN_PREFIX="laptop-config-"
 GIT_SECRETS="github.com:GH_TOKEN"
 
 # VM to lock the Heroku API key to (rotate-heroku-key.sh reads this): set
-# to a VM hostname (e.g. "lftux") to restrict heroku_session on other VMs
+# to a VM hostname (e.g. "lftux") to restrict heroku-session on other VMs
 # to a denial, or leave empty for a key any VM can use. See
 # architecture.md's Secrets Server section for how VM-locking works.
 HEROKU_API_KEY_VM="lftux"

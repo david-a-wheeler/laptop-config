@@ -3,7 +3,7 @@
 # Keychain under "HEROKU_API_KEY" (or "HEROKU_API_KEY@<vm-hostname>" if
 # config.sh's HEROKU_API_KEY_VM is set, to lock it to a single VM: see
 # architecture.md's Secrets Server section) - spelled like the environment
-# variable heroku_session sets, the same convention GH_TOKEN uses. Never
+# variable heroku-session sets, the same convention GH_TOKEN uses. Never
 # touches any other secret; it's the same "rotate first, cut over later"
 # shape as rotate-github-pat.sh.
 #
@@ -62,11 +62,11 @@ else
 fi
 cat <<'EOF'
 
-  heroku_session heroku auth:whoami
+  heroku-session heroku auth:whoami
 
 That fetches the key (one approval dialog here on the host), runs
 "heroku auth:whoami" with it set, and it's gone again once that
-command exits. Run "heroku_session" with no arguments instead to drop
+command exits. Run "heroku-session" with no arguments instead to drop
 into a shell for a whole burst of heroku commands at once.
 EOF
 cat <<EOF
@@ -79,7 +79,7 @@ until revoked. Rotating with the same VM lock produces the identical
 description each time, so matching by description can't tell old from
 new; this instead keeps only the single most recently created
 laptop-config authorization (by "created_at", not by description) and
-revokes every other one. This uses heroku_session rather than "heroku
+revokes every other one. This uses heroku-session rather than "heroku
 login" to authenticate it, so it never touches ~/.netrc at all: there's
 nothing to log out of afterward.
 EOF
@@ -92,7 +92,7 @@ fi
 cat <<'EOF'
 
 ~~~
-heroku_session
+heroku-session
 heroku authorizations -j | jq -r \
   '[.[] | select(.description | startswith("laptop-config"))] |
    sort_by(.created_at) | reverse | .[1:] | .[] | .id' |

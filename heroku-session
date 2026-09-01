@@ -1,0 +1,4 @@
+#!/bin/sh
+# One approval click, then HEROKU_API_KEY is set only for this command
+# (or an interactive shell if none given); see secrets-client.
+exec secrets-client HEROKU_API_KEY "${@:-$SHELL}"

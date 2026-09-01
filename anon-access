@@ -24,12 +24,12 @@
 # no confirmation dialog, since leaking it does no more harm than having
 # no token at all. Fetched here, not inside the sandbox: this script
 # still holds a real LAPTOP_CONFIG_AUTH_SESSION at this point (only the
-# command we exec below loses it), same as heroku_session/gh_session.
+# command we exec below loses it), same as heroku-session/gh-session.
 # If the fetch fails for any reason (server unreachable, no session,
 # secret not created yet), gh treats an empty GH_TOKEN exactly like an
 # unset one (confirmed), so this just degrades to today's "gh doesn't
 # work" instead of failing this whole script.
-public_token="$(secrets-client.py get GH_PUBLIC_TOKEN --context "anon-access: ${*:-interactive shell}" 2>/dev/null)" || public_token=""
+public_token="$(secrets-client --context "anon-access: ${*:-interactive shell}" --get GH_PUBLIC_TOKEN 2>/dev/null)" || public_token=""
 
 exec env -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
     -u SSH_AUTH_SOCK -u HEROKU_API_KEY \

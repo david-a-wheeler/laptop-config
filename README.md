@@ -35,7 +35,7 @@ A few pieces depend on each other, so the first pass needs this order:
    per VM; after that, key auth just works. No commit, no second VM pass.
 3. **On the host**: `./host-secrets.sh set GH_TOKEN`. Without
    this, every `git push`/`fetch` from a VM gets denied (no secret in
-   Keychain to release), and so does `gh_session gh ...` (`gh` reads the
+   Keychain to release), and so does `gh-session gh ...` (`gh` reads the
    same secret; see architecture.md's Secrets Server section).
 
 After that: `ssh lftux`/`scp x lftux:` works from the host, and a human
@@ -45,7 +45,7 @@ succeeds; the same command run via `noclaude` fails immediately instead
 
 Want Heroku access from a VM too? `./rotate-heroku-key.sh` (set
 `config.sh`'s `HEROKU_API_KEY_VM` first to lock it to one VM), then
-`heroku_session` on the VM; see architecture.md's Secrets Server section.
+`heroku-session` on the VM; see architecture.md's Secrets Server section.
 Optional, and independent of the git setup above.
 
 Adding a new VM later: create it in UTM, then just repeat step 1 (on the
@@ -115,18 +115,32 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   `HEROKU_API_KEY`. Set `config.sh`'s `HEROKU_API_KEY_VM` to store it
   locked to one VM instead of available to any of them. Once you've
   confirmed the new key works, it also finds and revokes any older Heroku
-  authorization for you (via `heroku_session`, so it never touches
+  authorization for you (via `heroku-session`, so it never touches
   `~/.netrc`), since a fresh one gets minted every time and the old one
   would otherwise stay valid.
 - `vm-setup.sh`: Ubuntu VM setup.
 - `vm-git-helper.template.py`: the VM-side git credential helper. Only
   speaks git's own stdin/stdout format; delegates the actual
-  `secrets-server.py` request to `secrets-client.py` below rather than
+  `secrets-server.py` request to `secrets-client` below rather than
   implementing that protocol itself.
 - `secrets-client.template.py`: generic VM-side CLI for fetching any named
-  secret from `secrets-server.py` (`secrets-client.py get <name>`), without
-  git's credential-helper-specific format. `vm-git-helper.py` and
-  `secret_session` (below) are both callers.
+  secret from `secrets-server.py`, installed without a `.py` extension
+  (`secrets-client`, not `secrets-client.py` - callers shouldn't need to
+  know this happens to be Python). `secrets-client [--as ENV_NAME]
+  [--context TEXT] NAME [COMMAND...]` fetches `NAME` once (one approval
+  dialog) and runs `COMMAND` (default: an interactive `$SHELL`) as a
+  *child* process with the secret set under `NAME` (or `ENV_NAME`, with
+  `--as`) only there, so a burst of commands needs one click instead of
+  one per command, and the secret is gone again once you exit; the
+  default `--context` shown in the dialog is `COMMAND` itself (or
+  `$SHELL`). `secrets-client --get NAME` prints the secret to stdout
+  instead, without running anything - this is what `vm-git-helper.py`,
+  `anon-access`, and `heroku-session`/`gh-session` (below) all build on.
+- `heroku-session`, `gh-session`: two-line wrapper scripts
+  (`exec secrets-client HEROKU_API_KEY/GH_TOKEN "$@"`) - thin, memorable
+  names for `secrets-client`'s two current recurring callers. Add another
+  one the same way for a new recurring secret; a once-off use can just
+  call `secrets-client NAME ...` directly.
 - `anon-access`: strips auth-related env vars (`SSH_AUTH_SOCK`,
   `LAPTOP_CONFIG_AUTH_SESSION`, `HEROKU_API_KEY`, GitHub Enterprise
   tokens) before running a command, or an interactive shell if none
@@ -141,16 +155,9 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   not yet installed by `vm-setup.sh` or called from `noclaude()`.
 - `nftables.template.conf`: VM egress firewall ruleset.
 - `vm-bash-aliases-block.template.sh`: the managed block installed into each
-  VM's `~/.bash_aliases`: editor, `LAPTOP_CONFIG_AUTH_SESSION`, the
-  `noclaude()` sandboxed-agent wrapper, and `secret_session` (fetches one
-  named secret once and runs a command, or an interactive shell if none
-  given, as a child process with that secret set under the given
-  environment variable name only there, so a burst of commands against
-  whatever it authenticates needs one approval click instead of one per
-  command, and the secret is gone again once you exit); `heroku_session`
-  and `gh_session` are thin aliases over it for `HEROKU_API_KEY` and
-  `GH_TOKEN`. Bash-only for now: it's installed into `~/.bash_aliases`,
-  which a shell like zsh doesn't source by default; supporting another
+  VM's `~/.bash_aliases`: editor, `LAPTOP_CONFIG_AUTH_SESSION`, and the
+  `noclaude()` sandboxed-agent wrapper. Bash-only for now: a shell like
+  zsh doesn't source `~/.bash_aliases` by default; supporting another
   shell would mean a separate file in that shell's own syntax, not just
   installing this one elsewhere.
 - `claude-CLAUDE.md`: global Claude Code instructions, installed to each
