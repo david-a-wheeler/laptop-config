@@ -46,7 +46,8 @@ named_secret_exists() {
 }
 
 cmd_list() {
-  echo "All secrets currently servable (stored under Keychain's \"${KEYCHAIN_PREFIX}\" prefix):"
+  # List secrets with prefix ${KEYCHAIN_PREFIX}
+  # This is not a privileged operations, because
   # "security dump-keychain" (no "-d") lists item attributes only, never
   # secret values: the closest thing security(1) has to "list by prefix",
   # since find-generic-password only does an exact -s match. "svce" is
@@ -64,7 +65,7 @@ cmd_list() {
     | grep -o '"svce"<blob>="[^"]*"' \
     | sed -e 's/^"svce"<blob>="//' -e 's/"$//' \
     | grep "^${KEYCHAIN_PREFIX}" \
-    | sed -e "s/^${KEYCHAIN_PREFIX}//" -e 's/^/  - /' \
+    | sed -e "s/^${KEYCHAIN_PREFIX}//" \
     | sort -u
 }
 
