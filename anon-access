@@ -31,9 +31,15 @@
 # work" instead of failing this whole script.
 public_token="$(secrets-client --context "anon-access: ${*:-interactive shell}" --get GH_PUBLIC_TOKEN 2>/dev/null)" || public_token=""
 
+# The nested "${SHELL:-/bin/sh}" fallback matters, not just "$SHELL":
+# tested and confirmed that at script top level (unlike inside a shell
+# function), "${@:-$SHELL}" with zero args AND an unset/empty $SHELL
+# expands to ONE empty-string argument, not zero - execvp() then fails
+# outright ("arg 2 first element cannot be empty") instead of running a
+# shell at all.
 exec env -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
     -u SSH_AUTH_SOCK -u HEROKU_API_KEY \
     -u LAPTOP_CONFIG_AUTH_SESSION \
     GH_CONFIG_DIR="$(mktemp -d)" \
     GH_TOKEN="$public_token" GITHUB_TOKEN="$public_token" \
-    "${@:-$SHELL}"
+    "${@:-${SHELL:-/bin/sh}}"

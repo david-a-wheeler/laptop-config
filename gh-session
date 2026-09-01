@@ -1,4 +1,4 @@
 #!/bin/sh
 # One approval click, then GH_TOKEN is set only for this command (or an
 # interactive shell if none given); see secrets-client.
-exec secrets-client GH_TOKEN "${@:-$SHELL}"
+exec secrets-client GH_TOKEN "${@:-${SHELL:-/bin/sh}}"
