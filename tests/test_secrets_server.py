@@ -23,7 +23,7 @@ def load_secrets_server():
       os.path.join(REPO_ROOT, "secrets-server.template.py"),
       "secrets_server_under_test",
       SECRETS_SERVER_PORT="9876",
-      KEYCHAIN_PREFIX="laptop-config-",
+      KEYCHAIN_PREFIX="bulkhead-",
       UTMCTL="/usr/bin/true",
   )
 
@@ -71,7 +71,7 @@ class VmLockFallbackTests(unittest.TestCase):
 
     def fake_read(name):
       calls.append(name)
-      return "SECRET" if name == "laptop-config-heroku-api-key@lftux" else ""
+      return "SECRET" if name == "bulkhead-heroku-api-key@lftux" else ""
 
     self.server._keychain_read = fake_read
     result = self.server.get_secret_from_keychain("heroku-api-key", "lftux")
@@ -80,13 +80,13 @@ class VmLockFallbackTests(unittest.TestCase):
     # found here), then the plain locked variant (found) - never
     # reaches either unlocked tier.
     self.assertEqual(calls, [
-        "laptop-config-heroku-api-key@lftux!",
-        "laptop-config-heroku-api-key@lftux",
+        "bulkhead-heroku-api-key@lftux!",
+        "bulkhead-heroku-api-key@lftux",
     ])
 
   def test_falls_back_to_unlocked_when_no_locked_entry(self):
     def fake_read(name):
-      return "SECRET" if name == "laptop-config-heroku-api-key" else ""
+      return "SECRET" if name == "bulkhead-heroku-api-key" else ""
 
     self.server._keychain_read = fake_read
     result = self.server.get_secret_from_keychain("heroku-api-key", "lftux")
@@ -97,7 +97,7 @@ class VmLockFallbackTests(unittest.TestCase):
 
     def fake_read(name):
       calls.append(name)
-      return "SECRET" if name == "laptop-config-heroku-api-key" else ""
+      return "SECRET" if name == "bulkhead-heroku-api-key" else ""
 
     self.server._keychain_read = fake_read
     result = self.server.get_secret_from_keychain("heroku-api-key", "")
@@ -105,8 +105,8 @@ class VmLockFallbackTests(unittest.TestCase):
     # No vm_hostname: only the two unlocked tiers are tried; no "@"
     # variant appears at all.
     self.assertEqual(calls, [
-        "laptop-config-heroku-api-key!",
-        "laptop-config-heroku-api-key",
+        "bulkhead-heroku-api-key!",
+        "bulkhead-heroku-api-key",
     ])
 
   def test_not_found_anywhere_returns_empty(self):
@@ -127,23 +127,23 @@ class NoConfirmationNamingTests(unittest.TestCase):
 
   def test_unlocked_bang_skips_confirmation(self):
     self.server._keychain_exists = (
-        lambda name: name == "laptop-config-GH_PUBLIC_TOKEN!"
+        lambda name: name == "bulkhead-GH_PUBLIC_TOKEN!"
     )
     self.assertFalse(self.server.needs_confirmation("GH_PUBLIC_TOKEN", ""))
 
   def test_plain_name_requires_confirmation(self):
-    self.server._keychain_exists = lambda name: name == "laptop-config-GH_TOKEN"
+    self.server._keychain_exists = lambda name: name == "bulkhead-GH_TOKEN"
     self.assertTrue(self.server.needs_confirmation("GH_TOKEN", ""))
 
   def test_locked_bang_skips_confirmation(self):
     self.server._keychain_exists = (
-        lambda name: name == "laptop-config-SOME_SECRET@mytux!"
+        lambda name: name == "bulkhead-SOME_SECRET@mytux!"
     )
     self.assertFalse(self.server.needs_confirmation("SOME_SECRET", "mytux"))
 
   def test_locked_without_bang_requires_confirmation(self):
     self.server._keychain_exists = (
-        lambda name: name == "laptop-config-SOME_SECRET@mytux"
+        lambda name: name == "bulkhead-SOME_SECRET@mytux"
     )
     self.assertTrue(self.server.needs_confirmation("SOME_SECRET", "mytux"))
 

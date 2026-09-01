@@ -40,7 +40,7 @@ echo "== Installing base packages =="
 # "heroku authorizations -j" through it. Checked against `apt-mark
 # showmanual` on lftux and deliberately left out anything project-specific
 # rather than universal: ruby, postgresql, and the heroku CLI are for one
-# project (BadgeApp) and don't belong in a generic laptop-config repo;
+# project (BadgeApp) and don't belong in a generic bulkhead repo;
 # cmake, autoconf, bison, pkg-config, and the lib*-dev packages are
 # ruby-build's prerequisites for compiling Ruby, same story; graphviz
 # looked like it might be a project's doc-generation dependency rather
@@ -257,7 +257,7 @@ if [ "$want_claude" = true ]; then
   install_unless_locally_newer "$SCRIPT_DIR/claude-CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 fi
 
-echo "== Managing ~/.bash_aliases block (editor, LAPTOP_CONFIG_AUTH_SESSION) =="
+echo "== Managing ~/.bash_aliases block (editor, BULKHEAD_AUTH_SESSION) =="
 # Plain file, not rendered: no @@VAR@@ substitution left in it.
 install_managed_block "$SCRIPT_DIR/vm-bash-aliases-block.sh" "$HOME/.bash_aliases"
 rm -f /tmp/bash-aliases-block.rendered

@@ -1,4 +1,4 @@
-# laptop-config
+# bulkhead
 
 Setup for my macOS host + Ubuntu VM (UTM) setup for running AI
 coding agents safely. See [architecture.md](architecture.md) for the why.
@@ -84,7 +84,7 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
 - `secrets-server.template.py`, `com.user.secretsserver.template.plist`:
   the host-side secrets server (see architecture.md) and its LaunchAgent.
   Serves any secret `host-secrets.sh` has stored under Keychain's
-  `KEYCHAIN_PREFIX` (`laptop-config-` by default; see `config.sh`); that
+  `KEYCHAIN_PREFIX` (`bulkhead-` by default; see `config.sh`); that
   prefix is what marks a secret as servable at all, nothing else to
   declare. Logs one JSONL record per request (approved/denied/errored,
   never the secret itself) to `/tmp/secrets-server.log`, flushed
@@ -145,7 +145,7 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   one the same way for a new recurring secret; a once-off use can just
   call `secrets-client NAME ...` directly.
 - `anon-access`: strips auth-related env vars (`SSH_AUTH_SOCK`,
-  `LAPTOP_CONFIG_AUTH_SESSION`, `HEROKU_API_KEY`, GitHub Enterprise
+  `BULKHEAD_AUTH_SESSION`, `HEROKU_API_KEY`, GitHub Enterprise
   tokens) before running a command, or an interactive shell if none
   given; a blocklist, not an allowlist, by design (see the script's own
   comment for why). Replaces `GH_TOKEN`/`GITHUB_TOKEN` rather than merely
@@ -169,7 +169,7 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   Plain executable file, not a bash function: any shell can run it.
 - `nftables.template.conf`: VM egress firewall ruleset.
 - `vm-bash-aliases-block.sh`: the managed block installed into each VM's
-  `~/.bash_aliases`: editor and `LAPTOP_CONFIG_AUTH_SESSION`. Not a
+  `~/.bash_aliases`: editor and `BULKHEAD_AUTH_SESSION`. Not a
   template (nothing left to substitute since `noclaude` moved out to its
   own file above). Bash-only for now: a shell like zsh doesn't source
   `~/.bash_aliases` by default; supporting another shell would mean a

@@ -1,5 +1,5 @@
 # Installed into ~/.bash_aliases (see install_managed_block in common.sh),
-# so everything below (LAPTOP_CONFIG_AUTH_SESSION) is only available from
+# so everything below (BULKHEAD_AUTH_SESSION) is only available from
 # bash: a shell that doesn't source ~/.bash_aliases (zsh's default config
 # doesn't) won't see it, regardless of whether it happens to also be
 # valid dash/POSIX sh. Supporting another shell means installing an
@@ -25,10 +25,10 @@ export PATH="$PATH:$HOME/.local/bin"
 # secrets-server.template.py for the other half of that) plus
 # SSH_AUTH_SOCK, HEROKU_API_KEY, and the GitHub Enterprise tokens - see
 # anon-access's own comment for the full list and why it's a blocklist.
-if [ -z "$LAPTOP_CONFIG_AUTH_SESSION" ]; then
+if [ -z "$BULKHEAD_AUTH_SESSION" ]; then
     # shellcheck disable=SC2155  # head/xxd failing here just means an
     # empty or malformed session id, which the secrets server already
     # denies cleanly as "missing session" - not worth splitting the
     # declare/assign for.
-    export LAPTOP_CONFIG_AUTH_SESSION="session_$(head -c 16 /dev/urandom | xxd -p)"
+    export BULKHEAD_AUTH_SESSION="session_$(head -c 16 /dev/urandom | xxd -p)"
 fi

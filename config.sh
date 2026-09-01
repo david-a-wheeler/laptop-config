@@ -35,7 +35,7 @@ SECRETS_SERVER_PORT="9876"
 # there's no separate list of allowed secret names to maintain here. Locking
 # a secret to one VM is a further naming convention on top of this: see
 # host-secrets.sh and architecture.md's Secrets Server section.
-KEYCHAIN_PREFIX="laptop-config-"
+KEYCHAIN_PREFIX="bulkhead-"
 
 # git host -> logical secret name, space-separated "host:name" pairs.
 # vm-setup.sh turns each pair into its own "git config --global

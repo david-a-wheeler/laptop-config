@@ -106,7 +106,7 @@ echo "== Generating an SSH key for host->VM access (if missing) =="
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
-  ssh-keygen -t ed25519 -N "" -f "$HOME/.ssh/id_ed25519" -C "laptop-config host->VM access"
+  ssh-keygen -t ed25519 -N "" -f "$HOME/.ssh/id_ed25519" -C "bulkhead host->VM access"
 fi
 
 echo "== Configuring SSH access to VMs (~/.ssh/config + authorized_keys, via utmctl) =="

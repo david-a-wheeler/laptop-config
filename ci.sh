@@ -83,13 +83,13 @@ step "jq revoke-filter logic (rotate-heroku-key.sh's auto-revoke query)"
 # older, plus an unrelated third entry that must never be touched.
 cat > "$tmp/fake_authorizations.json" <<'EOF'
 [
-  {"id": "OLD-1111-1111-1111-111111111111", "description": "laptop-config: lftux", "created_at": "2026-01-15T10:00:00-00:00"},
-  {"id": "NEW-2222-2222-2222-222222222222", "description": "laptop-config: lftux", "created_at": "2026-08-28T14:30:00-00:00"},
+  {"id": "OLD-1111-1111-1111-111111111111", "description": "bulkhead: lftux", "created_at": "2026-01-15T10:00:00-00:00"},
+  {"id": "NEW-2222-2222-2222-222222222222", "description": "bulkhead: lftux", "created_at": "2026-08-28T14:30:00-00:00"},
   {"id": "OTHER-333-333-333-333333333333", "description": "Heroku Dashboard", "created_at": "2026-08-28T14:31:00-00:00"}
 ]
 EOF
 result="$(jq -r '
-  [.[] | select(.description | startswith("laptop-config"))] |
+  [.[] | select(.description | startswith("bulkhead"))] |
   sort_by(.created_at) | reverse | .[1:] | .[] | .id
 ' "$tmp/fake_authorizations.json")"
 if [ "$result" != "OLD-1111-1111-1111-111111111111" ]; then

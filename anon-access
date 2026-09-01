@@ -23,7 +23,7 @@
 # for what the trailing "!" does), which secrets-server.py releases with
 # no confirmation dialog, since leaking it does no more harm than having
 # no token at all. Fetched here, not inside the sandbox: this script
-# still holds a real LAPTOP_CONFIG_AUTH_SESSION at this point (only the
+# still holds a real BULKHEAD_AUTH_SESSION at this point (only the
 # command we exec below loses it), same as heroku-session/gh-session.
 # If the fetch fails for any reason (server unreachable, no session,
 # secret not created yet), gh treats an empty GH_TOKEN exactly like an
@@ -39,7 +39,7 @@ public_token="$(secrets-client --context "anon-access: ${*:-interactive shell}" 
 # shell at all.
 exec env -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
     -u SSH_AUTH_SOCK -u HEROKU_API_KEY \
-    -u LAPTOP_CONFIG_AUTH_SESSION \
+    -u BULKHEAD_AUTH_SESSION \
     GH_CONFIG_DIR="$(mktemp -d)" \
     GH_TOKEN="$public_token" GITHUB_TOKEN="$public_token" \
     "${@:-${SHELL:-/bin/sh}}"

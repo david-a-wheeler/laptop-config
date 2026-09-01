@@ -52,13 +52,13 @@ render_template() {
 # Usage: install_managed_block <block-content-file> <target-file>
 # Inserts (or replaces) a marker-delimited block in <target-file>, leaving
 # every other line in the file untouched. Safe to re-run: it always removes
-# any previous laptop-config block before appending the current one, so the
+# any previous bulkhead block before appending the current one, so the
 # block never duplicates and always reflects the repo's current content.
 install_managed_block() {
   block_file="$1"
   target="$2"
-  begin_marker="# >>> laptop-config >>>"
-  end_marker="# <<< laptop-config <<<"
+  begin_marker="# >>> bulkhead >>>"
+  end_marker="# <<< bulkhead <<<"
   touch "$target"
   tmp="$(mktemp)"
   awk -v begin="$begin_marker" -v end="$end_marker" '

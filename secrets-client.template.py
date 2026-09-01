@@ -32,7 +32,7 @@ for wherever one exists); secrets-server.py applies KEYCHAIN_PREFIX and
 any VM-lock/no-confirmation suffix itself - never send one of those
 suffixes here directly, see secrets-server.template.py's _resolve().
 
-Requires LAPTOP_CONFIG_AUTH_SESSION to be set (see
+Requires BULKHEAD_AUTH_SESSION to be set (see
 vm-bash-aliases-block.sh, which generates one for every human
 interactive shell). Without it, the server denies the request without
 ever consulting Keychain, same as any other caller. noclaude strips it
@@ -69,7 +69,7 @@ def fetch_secret(name: str, context: str) -> str:
   found, or unreachable.
   """
   payload = {
-      "session": os.environ.get("LAPTOP_CONFIG_AUTH_SESSION", ""),
+      "session": os.environ.get("BULKHEAD_AUTH_SESSION", ""),
       "path": os.getcwd(),
       "context": context,
       "secret_name": name,

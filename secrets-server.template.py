@@ -214,7 +214,7 @@ def needs_confirmation(name: str, vm_hostname: str) -> bool:
   _resolve for what marks a secret as not needing one. Never reads the
   secret's value (see _keychain_exists). Doesn't affect the session
   check: a no-confirmation secret still requires a real
-  LAPTOP_CONFIG_AUTH_SESSION, only the human click is skipped.
+  BULKHEAD_AUTH_SESSION, only the human click is skipped.
   """
   _, confirm = _resolve(name, vm_hostname, _keychain_exists)
   return confirm
@@ -268,7 +268,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
           client=client_ip, secret_name=secret_name,
       )
       self._respond(
-          {"status": "denied", "reason": "Missing LAPTOP_CONFIG_AUTH_SESSION"}, 403
+          {"status": "denied", "reason": "Missing BULKHEAD_AUTH_SESSION"}, 403
       )
       return
 
@@ -453,7 +453,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
   def _show_approval_dialog(self, prompt_text: str,
                              title: str = "Secrets Server Gatekeeper") -> bool:
     """Defaults to Authorize (bare Enter approves): only ever fires for a
-    request with a live LAPTOP_CONFIG_AUTH_SESSION, which noclaude
+    request with a live BULKHEAD_AUTH_SESSION, which noclaude
     strips before an AI agent gets near it, so this gates routine human
     operations, not an adversarial AI.
     """
