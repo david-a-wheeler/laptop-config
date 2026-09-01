@@ -4,9 +4,11 @@
 Listens on the virtual bridge interface, looks up a named secret in
 Keychain, and prompts for human approval before releasing it. Serves any
 secret host-secrets.sh has stored, not just a single GitHub PAT: the
-caller (vm-git-helper.py or any other VM-side script) names which secret it
-wants via "secret_name" in the request payload; vm-git-helper.py resolves
-that name from config.sh's GIT_SECRETS.
+caller (vm-git-helper or any other VM-side script) names which secret it
+wants via "secret_name" in the request payload; for vm-git-helper, that
+name is baked into a git config credential.<url>.helper line by
+vm-setup.sh from config.sh's GIT_SECRETS, so git itself has already
+picked it before vm-git-helper ever runs.
 
 Rendered from secrets-server.template.py by host-setup.sh: edit the
 template, not the installed copy, since a re-run of host-setup.sh

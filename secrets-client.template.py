@@ -16,7 +16,7 @@ Usage:
     live process again, with no separate cleanup step. Default
     --context is COMMAND itself (or $SHELL, when COMMAND is omitted),
     since that's what's actually about to happen; override it when
-    that's not descriptive enough on its own (see vm-git-helper.py's
+    that's not descriptive enough on its own (see vm-git-helper's
     git-commit-summary context).
   secrets-client --get [--context TEXT] NAME
     Prints the secret to stdout instead of running anything. No COMMAND.

@@ -32,9 +32,10 @@ echo "== Installing base packages =="
 # git/shellcheck/make/build-essential/vim/python3: general-purpose dev
 # tools worth having on every VM regardless of project (vim in particular
 # because EDITOR/VISUAL below are set to it; python3 because
-# vm-git-helper.py above is a Python script invoked directly by git, so
-# it's a hard requirement for the git-auth bridge, not just a nicety; it's
-# not worth assuming it's preinstalled). jq is here for the same reason:
+# secrets-client (which vm-git-helper below shells out to on every git
+# push/fetch) is a Python script, so it's a hard requirement for the
+# git-auth bridge, not just a nicety; it's not worth assuming it's
+# preinstalled). jq is here for the same reason:
 # rotate-heroku-key.sh's revoke-the-old-authorization step filters
 # "heroku authorizations -j" through it. Checked against `apt-mark
 # showmanual` on lftux and deliberately left out anything project-specific
@@ -177,29 +178,39 @@ else
 fi
 
 echo "== Installing vm-git-helper (git credential helper) =="
-# At runtime this shells out to secrets-client (installed just below),
-# rather than speaking to secrets-server.py directly; install order here
-# doesn't matter, since git never invokes this until well after
-# vm-setup.sh has finished and both files exist.
-git_secrets_py_dict="{"
-first=1
+# Plain file, no templating needed: it takes the secret name as an
+# argument rather than having one baked in (see below), so it's
+# installed the same way as heroku-session/gh-session, not rendered.
+sudo cp "$SCRIPT_DIR/vm-git-helper" /usr/local/bin/vm-git-helper
+sudo chmod +x /usr/local/bin/vm-git-helper
+
+# One credential.<url>.helper per GIT_SECRETS entry, each with its
+# secret name baked directly into the config line: git resolves which
+# one applies to a given remote itself (by URL), so vm-git-helper never
+# has to parse "host=" out of git's own stdin protocol or carry a
+# host->name lookup table of its own. Plain "git config" (not --add):
+# idempotent, re-running this always leaves exactly one entry per host,
+# never accumulating duplicates.
 for pair in $GIT_SECRETS; do
   host="${pair%%:*}"
   secret="${pair#*:}"
-  if [ "$first" -eq 0 ]; then
-    git_secrets_py_dict="${git_secrets_py_dict}, "
-  fi
-  git_secrets_py_dict="${git_secrets_py_dict}\"${host}\": \"${secret}\""
-  first=0
+  # Absolute path, not bare "vm-git-helper": a bare name here is a git
+  # convention meaning "run git-credential-<name>" (like "store" means
+  # git-credential-store), not "execute this literally" - confirmed
+  # directly, a bare name fails with "'credential-vm-git-helper' is not
+  # a git command" instead of ever running our script.
+  git config --global "credential.https://${host}.helper" "/usr/local/bin/vm-git-helper ${secret}"
 done
-git_secrets_py_dict="${git_secrets_py_dict}}"
-GIT_SECRETS_PY_DICT="$git_secrets_py_dict"
-render_template "$SCRIPT_DIR/vm-git-helper.template.py" /tmp/vm-git-helper.py.rendered \
-  GIT_SECRETS_PY_DICT
-sudo cp /tmp/vm-git-helper.py.rendered /usr/local/bin/vm-git-helper.py
-sudo chmod +x /usr/local/bin/vm-git-helper.py
-rm -f /tmp/vm-git-helper.py.rendered
-git config --global credential.helper /usr/local/bin/vm-git-helper.py
+# Remove the old single global credential.helper from before this
+# change, but only if it's still exactly what we used to set here:
+# never touch a helper set for some other reason. Left in place, it'd
+# be harmless (git tries it in addition to the per-host ones above and
+# it'd just fail to exec, since the file's gone below), but there's no
+# reason to leave a dangling reference to a deleted script around.
+if [ "$(git config --global --get credential.helper 2>/dev/null)" = "/usr/local/bin/vm-git-helper.py" ]; then
+  git config --global --unset credential.helper
+fi
+sudo rm -f /usr/local/bin/vm-git-helper.py
 
 echo "== Installing secrets-client (generic secrets-server CLI, used by heroku-session/gh-session) =="
 # Installed without a ".py" extension (see secrets-client.template.py):

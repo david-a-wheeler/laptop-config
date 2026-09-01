@@ -21,8 +21,8 @@ export PATH="$PATH:$HOME/.local/bin"
 
 # Human interactive shells get a session handle; noclaude() below strips
 # it so the sandboxed AI agent can never request host secrets (see
-# vm-git-helper.template.py and secrets-server.template.py for the other
-# half of that). It also strips SSH_AUTH_SOCK, a separate precaution so the
+# vm-git-helper and secrets-server.template.py for the other half of
+# that). It also strips SSH_AUTH_SOCK, a separate precaution so the
 # agent can't use a forwarded ssh-agent for anything else either, and every
 # env var heroku-session/gh-session can inject, in case such a session's
 # child shell is still live in this same shell tree when noclaude() gets

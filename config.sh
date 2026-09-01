@@ -26,7 +26,7 @@ VM_USER="dwheeler"
 MACOS_INFER_USER="_infer"
 
 # Port the host secrets server (secrets-server.py) listens on, and that
-# vm-git-helper.py (and any other VM-side caller) talks to.
+# secrets-client (and any other VM-side caller) talks to.
 SECRETS_SERVER_PORT="9876"
 
 # Prefix every host-secrets.sh-managed Keychain entry is stored under. This
@@ -38,12 +38,14 @@ SECRETS_SERVER_PORT="9876"
 KEYCHAIN_PREFIX="laptop-config-"
 
 # git host -> logical secret name, space-separated "host:name" pairs.
-# vm-git-helper.py (rendered from vm-git-helper.template.py) looks up the
-# right secret name here for whatever git host it's asked to authenticate,
-# then asks secrets-server.py for it by that short name (KEYCHAIN_PREFIX is
-# applied host-side, never sent over the wire). Add an entry here (and run
-# host-secrets.sh set <name> on the host) to bring another git host under
-# the proxy; no script changes needed.
+# vm-setup.sh turns each pair into its own "git config --global
+# credential.https://<host>.helper 'vm-git-helper <name>'" line: git
+# itself picks which one applies to a given remote (by URL), so
+# vm-git-helper never has to parse "host=" out of git's own stdin
+# protocol or carry a host->name lookup table of its own; the name is
+# just an argument baked into the config line. Add an entry here (and
+# run host-secrets.sh set <name> on the host, then vm-setup.sh on the
+# VM) to bring another git host under the proxy; no script changes needed.
 #
 # Every secret name here (and every name secrets-client takes) is
 # spelled like the environment variable it stands in for, e.g. "GH_TOKEN"

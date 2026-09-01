@@ -119,10 +119,13 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   `~/.netrc`), since a fresh one gets minted every time and the old one
   would otherwise stay valid.
 - `vm-setup.sh`: Ubuntu VM setup.
-- `vm-git-helper.template.py`: the VM-side git credential helper. Only
-  speaks git's own stdin/stdout format; delegates the actual
-  `secrets-server.py` request to `secrets-client` below rather than
-  implementing that protocol itself.
+- `vm-git-helper`: the VM-side git credential helper. Plain file, not a
+  template: git invokes it as `vm-git-helper NAME get|store|erase`, with
+  `NAME` baked into a `credential.<url>.helper` config line per host by
+  `vm-setup.sh` (from `config.sh`'s `GIT_SECRETS`), so it never has to
+  parse git's own stdin protocol or carry a host->name lookup table
+  itself; `store`/`erase` are no-ops, `get` shells out to
+  `secrets-client --get` below.
 - `secrets-client.template.py`: generic VM-side CLI for fetching any named
   secret from `secrets-server.py`, installed without a `.py` extension
   (`secrets-client`, not `secrets-client.py` - callers shouldn't need to
@@ -134,8 +137,8 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   one per command, and the secret is gone again once you exit; the
   default `--context` shown in the dialog is `COMMAND` itself (or
   `$SHELL`). `secrets-client --get NAME` prints the secret to stdout
-  instead, without running anything - this is what `vm-git-helper.py`,
-  `anon-access`, and `heroku-session`/`gh-session` (below) all build on.
+  instead, without running anything - this is what `vm-git-helper` and
+  `anon-access` build on.
 - `heroku-session`, `gh-session`: two-line wrapper scripts
   (`exec secrets-client HEROKU_API_KEY/GH_TOKEN "$@"`) - thin, memorable
   names for `secrets-client`'s two current recurring callers. Add another
