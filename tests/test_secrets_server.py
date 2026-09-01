@@ -152,5 +152,29 @@ class NoConfirmationNamingTests(unittest.TestCase):
     self.assertTrue(self.server.needs_confirmation("NEVER_STORED", ""))
 
 
+class SessionApprovalTrackingTests(unittest.TestCase):
+  """session_previously_approved()/mark_session_approved() drive the
+  approval dialog's default button: Deny until a session id has had at
+  least one approval, Authorize after. In-memory only (see the module
+  docstring), so each test gets a fresh, empty set via load_secrets_server()
+  (render_and_import() never registers the module in sys.modules, so
+  there's nothing for one test to leak into another).
+  """
+
+  def setUp(self):
+    self.server = load_secrets_server()
+
+  def test_unseen_session_not_previously_approved(self):
+    self.assertFalse(self.server.session_previously_approved("session-a"))
+
+  def test_marking_approved_is_remembered(self):
+    self.server.mark_session_approved("session-a")
+    self.assertTrue(self.server.session_previously_approved("session-a"))
+
+  def test_different_sessions_tracked_independently(self):
+    self.server.mark_session_approved("session-a")
+    self.assertFalse(self.server.session_previously_approved("session-b"))
+
+
 if __name__ == "__main__":
   unittest.main()

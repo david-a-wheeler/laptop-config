@@ -40,6 +40,14 @@ shows it directly, with nothing else to keep in sync. Only ever use this
 for a secret that leaking does meaningfully no more harm than having no
 secret at all (see GH_PUBLIC_TOKEN in rotate-github-pat.sh).
 
+The approval dialog itself defaults to Deny the first time a given
+session id shows up, and to Authorize once that session has had a prior
+approval; see session_previously_approved(). This is tracked purely in
+memory for this process's lifetime, not persisted anywhere: it's a
+dialog-default convenience, not a security boundary (a missing or empty
+session is still always denied outright, above), so there's nothing
+wrong with forgetting it on every server restart.
+
 Logs one JSON object per line to stdout (see log_event) for every request
 this handles, approved/denied/errored, not just crashes. This exists
 because of a real incident: the process was alive and correctly bound (the
@@ -62,12 +70,33 @@ import json
 import re
 import socket
 import subprocess
+import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LISTEN_PORT = @@SECRETS_SERVER_PORT@@
 KEYCHAIN_PREFIX = "@@KEYCHAIN_PREFIX@@"
 UTMCTL = "@@UTMCTL@@"
+
+# Session ids that have had at least one approval dialog actually clicked
+# "Authorize" during this process's lifetime; see session_previously_approved().
+# In-memory only, on purpose: this is just "have we seen a human approve
+# something in this session before" for picking a dialog default, not a
+# security boundary (BULKHEAD_AUTH_SESSION itself is that), so there's
+# nothing worth persisting across a server restart. Guarded by a lock since
+# ThreadingHTTPServer runs each request's dialog on its own thread.
+_approved_sessions = set()
+_approved_sessions_lock = threading.Lock()
+
+
+def session_previously_approved(session_id: str) -> bool:
+  with _approved_sessions_lock:
+    return session_id in _approved_sessions
+
+
+def mark_session_approved(session_id: str) -> None:
+  with _approved_sessions_lock:
+    _approved_sessions.add(session_id)
 
 
 def log_event(level: str, event: str, **fields) -> None:
@@ -361,9 +390,14 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
       )
       return
 
+    new_session = not session_previously_approved(session_id)
     prompt_text = (
         f"Secrets Server Request\n\n"
-        f"Secret: {_applescript_escape(secret_name)}\n"
+        + (
+            "NEW SESSION: no request from this session id has been "
+            "approved yet this run.\n\n" if new_session else ""
+        )
+        + f"Secret: {_applescript_escape(secret_name)}\n"
         f"Requesting VM: {_applescript_escape(vm_hostname or 'unknown')}\n"
         f"Target Path: {_applescript_escape(repo_path)}\n"
         f"Local Context: {_applescript_escape(context_info)}\n"
@@ -375,9 +409,13 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
       log_event(
           "info", "secret_prompt_shown", client=client_ip,
           vm=vm_hostname or "unknown", secret_name=secret_name,
-          session=session_id[:8], path=repo_path,
+          session=session_id[:8], path=repo_path, new_session=new_session,
       )
-      approved = self.show_approval_prompt(prompt_text)
+      approved = self.show_approval_prompt(
+          prompt_text, default_authorize=not new_session
+      )
+      if approved:
+        mark_session_approved(session_id)
     else:
       log_event(
           "info", "secret_auto_approved", client=client_ip,
@@ -429,9 +467,14 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
       )
       return
 
+    new_session = not session_previously_approved(session_id)
     prompt_text = (
         f"TEST REQUEST: dry run, no secret will be released\n\n"
-        f"Secret: {_applescript_escape(secret_name)}\n"
+        + (
+            "NEW SESSION: no request from this session id has been "
+            "approved yet this run.\n\n" if new_session else ""
+        )
+        + f"Secret: {_applescript_escape(secret_name)}\n"
         f"Requesting VM: {_applescript_escape(vm_hostname or 'unknown')}\n"
         f"Target Path: {_applescript_escape(repo_path)}\n"
         f"Local Context: {_applescript_escape(context_info)}\n"
@@ -443,11 +486,14 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
       log_event(
           "info", "secret_dry_run_prompt_shown", client=client_ip,
           vm=vm_hostname or "unknown", secret_name=secret_name,
-          session=session_id[:8], path=repo_path,
+          session=session_id[:8], path=repo_path, new_session=new_session,
       )
       approved = self.show_approval_prompt(
-          prompt_text, title="Secrets Server Gatekeeper (TEST)"
+          prompt_text, title="Secrets Server Gatekeeper (TEST)",
+          default_authorize=not new_session,
       )
+      if approved:
+        mark_session_approved(session_id)
     else:
       approved = True
     log_event(
@@ -473,20 +519,31 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
     return res.stdout
 
   def show_approval_prompt(self, prompt_text: str,
-                            title: str = "Secrets Server Gatekeeper") -> bool:
+                            title: str = "Secrets Server Gatekeeper",
+                            default_authorize: bool = True) -> bool:
     """Shows the human-approval dialog via AppleScript/osascript: this and
     _show_alert_dialog below are this server's only other OS-specific call
     (besides retrieve_secret/secret_exists/enumerate_guests above); a
     different backend (a non-GUI host, say) would only need to replace
-    this method. Defaults to Authorize (bare Enter approves): only ever
-    fires for a request with a live BULKHEAD_AUTH_SESSION, which noclaude
-    strips before an AI agent gets near it, so this gates routine human
-    operations, not an adversarial AI.
+    this method. Only ever fires for a request with a live
+    BULKHEAD_AUTH_SESSION, which noclaude strips before an AI agent gets
+    near it, so this gates routine human operations, not an adversarial AI.
+
+    default_authorize picks which button a bare Enter triggers: "Deny"
+    the first time a given session id shows up (see
+    session_previously_approved()), "Authorize" once that session has
+    had a prior approval. A session id is generated fresh per human
+    interactive shell (vm-bash-aliases-block.sh), so a first-time prompt
+    defaulting to Deny means a moment's inattention doesn't rubber-stamp
+    a session nobody's actually looked at yet; once you've approved
+    anything in it, later prompts in that same shell go back to the
+    quick-approve default.
     """
+    default_button = "Authorize" if default_authorize else "Deny"
     applescript = (
         f'display dialog "{prompt_text}" with title'
         f' "{_applescript_escape(title)}"'
-        ' buttons {"Deny", "Authorize"} default button "Authorize"'
+        f' buttons {{"Deny", "Authorize"}} default button "{default_button}"'
     )
     stdout = self._run_dialog(applescript, "approval_dialog_stderr")
     return "button returned:Authorize" in stdout
