@@ -22,11 +22,21 @@ forgotten.
 
 A secret can also be locked to one specific VM by storing it under
 "<name>@<vm-hostname>" (still under the KEYCHAIN_PREFIX) instead of the
-plain "<name>": see resolve_vm_hostname() and get_secret_from_keychain().
-The VM's identity is resolved from the request's real network source IP
+plain "<name>": see resolve_vm_hostname() and _resolve(). The VM's
+identity is resolved from the request's real network source IP
 cross-referenced against `utmctl ip-address`, the same source of truth
 host-setup.sh already uses for ~/.ssh/config, so no separate credential is
 distributed to VMs to identify themselves.
+
+Separately, a secret can be marked as releasable without a human
+approval dialog by storing it under "<name>!" instead of "<name>" (the
+two compose: "<name>@<vm-hostname>!" is both locked and dialog-free);
+see needs_confirmation() and _resolve(). Every secret defaults to
+requiring approval, so this only ever happens by deliberately choosing
+that name at `host-secrets.sh set` time, and `host-secrets.sh list`
+shows it directly, with nothing else to keep in sync. Only ever use this
+for a secret that leaking does meaningfully no more harm than having no
+secret at all (see GH_PUBLIC_TOKEN in rotate-github-pat.sh).
 
 Logs one JSON object per line to stdout (see log_event) for every request
 this handles, approved/denied/errored, not just crashes. This exists
@@ -56,17 +66,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 LISTEN_PORT = @@SECRETS_SERVER_PORT@@
 KEYCHAIN_PREFIX = "@@KEYCHAIN_PREFIX@@"
 UTMCTL = "@@UTMCTL@@"
-NO_APPROVAL_SECRETS = "@@NO_APPROVAL_SECRETS@@".split()
-
-
-def needs_confirmation(secret_name: str) -> bool:
-  """False for a secret config.sh's NO_APPROVAL_SECRETS explicitly opts
-  out of the dialog for (e.g. GH_PUBLIC_TOKEN); true for everything else,
-  which is the default. Doesn't affect the session check: an opted-out
-  secret still requires a real LAPTOP_CONFIG_AUTH_SESSION, only the
-  human click is skipped.
-  """
-  return secret_name not in NO_APPROVAL_SECRETS
 
 
 def log_event(level: str, event: str, **fields) -> None:
@@ -165,27 +164,58 @@ def _keychain_exists(service_name: str) -> bool:
   ).returncode == 0
 
 
-def _locked_then_unlocked(name: str, vm_hostname: str, lookup):
-  """Tries `lookup` on the VM-locked name first, falling back to the
-  unlocked name: the entire VM-locking mechanism (see host-secrets.sh).
-  Parameterized on `lookup` so dry-run's keychain_secret_exists can
-  share this without ever calling _keychain_read, i.e. without ever
-  reading a real secret's value.
+def _resolve(name: str, vm_hostname: str, lookup):
+  """Tries every combination of VM-locking and the "!" no-confirmation
+  suffix that could apply to this request, most to least specific:
+  "<name>@<vm>!", "<name>@<vm>", "<name>!", "<name>". Returns (result,
+  needs_confirmation): result is whatever `lookup` returned for the
+  first variant that matched (a falsy `lookup` result means "keep
+  trying"); needs_confirmation is False only when the variant that
+  matched ends in "!". If nothing matches, returns whatever the last
+  (always-tried, unlocked, no-bang) lookup returned, paired with True -
+  callers only ever look at needs_confirmation when result is truthy.
+
+  This is the entire VM-locking mechanism and the entire
+  no-confirmation mechanism, both at once: storing a secret under
+  "name!" instead of "name" (there's no separate NO_APPROVAL_SECRETS
+  list to keep in sync) is what marks it as needing no dialog, visible
+  directly in "host-secrets.sh list". The two compose freely: "name@vm!"
+  is both locked to one VM and confirmation-free. Parameterized on
+  `lookup` so dry-run's keychain_secret_exists can share this without
+  ever calling _keychain_read, i.e. without ever reading a real secret's
+  value.
   """
+  candidates = [(f"{name}!", False), (name, True)]
   if vm_hostname:
-    locked = lookup(f"{KEYCHAIN_PREFIX}{name}@{vm_hostname}")
-    if locked:
-      return locked
-  return lookup(f"{KEYCHAIN_PREFIX}{name}")
+    candidates = [(f"{name}@{vm_hostname}!", False),
+                  (f"{name}@{vm_hostname}", True)] + candidates
+  for variant, confirm in candidates:
+    result = lookup(f"{KEYCHAIN_PREFIX}{variant}")
+    if result:
+      return result, confirm
+  return result, True
 
 
 def get_secret_from_keychain(name: str, vm_hostname: str) -> str:
-  return _locked_then_unlocked(name, vm_hostname, _keychain_read)
+  value, _ = _resolve(name, vm_hostname, _keychain_read)
+  return value
 
 
 def keychain_secret_exists(name: str, vm_hostname: str) -> bool:
   """Like get_secret_from_keychain, but never reads the secret's value."""
-  return bool(_locked_then_unlocked(name, vm_hostname, _keychain_exists))
+  found, _ = _resolve(name, vm_hostname, _keychain_exists)
+  return bool(found)
+
+
+def needs_confirmation(name: str, vm_hostname: str) -> bool:
+  """Whether releasing this secret needs a human approval dialog; see
+  _resolve for what marks a secret as not needing one. Never reads the
+  secret's value (see _keychain_exists). Doesn't affect the session
+  check: a no-confirmation secret still requires a real
+  LAPTOP_CONFIG_AUTH_SESSION, only the human click is skipped.
+  """
+  _, confirm = _resolve(name, vm_hostname, _keychain_exists)
+  return confirm
 
 
 def _applescript_escape(s: str) -> str:
@@ -252,23 +282,23 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
 
     vm_hostname = resolve_vm_hostname(client_ip)
 
-    if "@" in secret_name:
-      # A well-behaved client (vm-git-helper.py) only ever sends a plain
-      # logical name: the "@vm-hostname" suffix that marks a locked
-      # Keychain entry (see get_secret_from_keychain) is a server-side
-      # detail, computed here from the request's own resolved source IP,
-      # never something a client supplies itself. Without this check, a
-      # client could send "somename@othervm" directly and the unlocked-
-      # fallback lookup in get_secret_from_keychain would treat that whole
-      # string as an opaque name and find it verbatim, silently defeating
-      # the entire locking mechanism. Always denied either way, but this
-      # gets its own alert dialog (not the normal approve/deny one) rather
-      # than looking like an ordinary "not found," since it's either a
-      # misconfigured client or a deliberate attempt to name another VM's
-      # locked secret directly, and a human should notice regardless of
-      # which it turns out to be.
+    if "@" in secret_name or "!" in secret_name:
+      # A well-behaved client only ever sends a plain logical name: both
+      # the "@vm-hostname" suffix (a VM-locked Keychain entry) and the
+      # "!" suffix (a no-confirmation entry; see _resolve) are
+      # server-side details, never something a client supplies itself.
+      # Without this check, a client could send "somename@othervm" or
+      # "somename!" directly and the fallback lookup in _resolve would
+      # treat that whole string as an opaque name and find it verbatim,
+      # silently defeating VM-locking or the confirmation dialog. Always
+      # denied either way, but this gets its own alert dialog (not the
+      # normal approve/deny one) rather than looking like an ordinary
+      # "not found," since it's either a misconfigured client or a
+      # deliberate attempt to name another secret's locked or
+      # no-confirmation variant directly, and a human should notice
+      # regardless of which it turns out to be.
       log_event(
-          "warning", "secret_denied", reason="secret_name_contains_at",
+          "warning", "secret_denied", reason="secret_name_contains_at_or_bang",
           client=client_ip, vm=vm_hostname or "unknown",
           secret_name=secret_name,
       )
@@ -277,11 +307,11 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
           f"From: {_applescript_escape(client_ip)} "
           f"(resolved VM: {_applescript_escape(vm_hostname or 'unknown')})\n"
           f"Requested secret name: {_applescript_escape(secret_name)}\n\n"
-          f"Secret names containing \"@\" are never sent by a normal "
-          f"client: this looks like a misconfigured script, or an "
-          f"attempt to request another VM's locked secret directly. "
-          f"This request has already been denied; no action needed "
-          f"unless you don't recognize it."
+          f"Secret names containing \"@\" or \"!\" are never sent by a "
+          f"normal client: this looks like a misconfigured script, or an "
+          f"attempt to request another secret's locked or "
+          f"no-confirmation variant directly. This request has already "
+          f"been denied; no action needed unless you don't recognize it."
       )
       self._respond(
           {"status": "denied", "reason": "Invalid secret_name"}, 400
@@ -317,7 +347,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
         f"Authorize access for this operation?"
     )
 
-    if needs_confirmation(secret_name):
+    if needs_confirmation(secret_name, vm_hostname):
       log_event(
           "info", "secret_prompt_shown", client=client_ip,
           vm=vm_hostname or "unknown", secret_name=secret_name,
@@ -385,7 +415,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
         f"This only tests connectivity and this dialog; nothing is "
         f"released either way."
     )
-    if needs_confirmation(secret_name):
+    if needs_confirmation(secret_name, vm_hostname):
       log_event(
           "info", "secret_dry_run_prompt_shown", client=client_ip,
           vm=vm_hostname or "unknown", secret_name=secret_name,

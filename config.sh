@@ -58,25 +58,15 @@ KEYCHAIN_PREFIX="laptop-config-"
 # whole design keeps out of VMs. secret_session GH_TOKEN gets the same
 # token into a single child process's environment instead, the same
 # ephemeral, human-approved pattern as everything else here.
-GIT_SECRETS="github.com:GH_TOKEN"
-
-# Space-separated secret names secrets_server.py releases without a human
-# approval dialog (still requires a real LAPTOP_CONFIG_AUTH_SESSION, so a
-# sandboxed AI agent still can't fetch these directly; only the dialog is
-# skipped). Opt-in and host-controlled: every secret defaults to requiring
-# approval, so a secret only ends up here by a deliberate edit of this
-# file, never implicitly. Only list a secret here if leaking it does
-# meaningfully no more harm than having no secret at all.
 #
-# GH_PUBLIC_TOKEN is the first case: a fine-grained GitHub PAT scoped to
-# "Public Repositories (read-only)" (see rotate-github-pat.sh), used by
-# anon_access to make gh(1) work for a sandboxed AI agent reading public
-# data. gh refuses to run at all without *some* token (see
-# https://github.com/cli/cli/issues/13307), but this one grants nothing
-# beyond what an anonymous request already could, just at a higher rate
-# limit, so a per-request click would be pure friction with no security
-# benefit.
-NO_APPROVAL_SECRETS="GH_PUBLIC_TOKEN"
+# GH_PUBLIC_TOKEN (used by anon_access, not listed here since it's not a
+# git host secret) is stored under the name "GH_PUBLIC_TOKEN!", not
+# "GH_PUBLIC_TOKEN": a trailing "!" is what marks a Keychain entry as
+# releasable without a human approval dialog (see secrets_server.template.py's
+# _resolve() and host-secrets.sh); every secret defaults to requiring
+# approval, so this only ever happens via a deliberate choice of name at
+# "host-secrets.sh set" time, and "host-secrets.sh list" shows it directly.
+GIT_SECRETS="github.com:GH_TOKEN"
 
 # VM to lock the Heroku API key to (rotate-heroku-key.sh reads this): set
 # to a VM hostname (e.g. "lftux") to restrict heroku_session on other VMs

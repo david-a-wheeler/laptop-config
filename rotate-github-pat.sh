@@ -1,13 +1,16 @@
 #!/bin/sh
 # rotate-github-pat.sh: rotates both GitHub PATs this repo stores, one
 # after another: GH_TOKEN (a classic PAT, scopes repo+workflow; backs
-# git's HTTPS auth and gh_session) and GH_PUBLIC_TOKEN (a fine-grained
+# git's HTTPS auth and gh_session) and GH_PUBLIC_TOKEN! (a fine-grained
 # PAT scoped to "Public Repositories (read-only)"; backs anon_access, so
 # gh(1) works for a sandboxed AI agent reading public data without ever
-# handing it real access - see config.sh's NO_APPROVAL_SECRETS). Rotated
-# together since both typically expire on the same org-enforced
-# schedule; press Enter at either prompt to leave that one secret
-# unchanged if it hasn't actually expired yet.
+# handing it real access). The trailing "!" is deliberate, not a typo:
+# it's what marks a Keychain entry as releasable with no confirmation
+# dialog (see secrets_server.template.py's _resolve()); everything else
+# defaults to requiring one. Rotated together since both typically
+# expire on the same org-enforced schedule; press Enter at either
+# prompt to leave that one secret unchanged if it hasn't actually
+# expired yet.
 #
 # Never touches config.sh or the currently active secrets; the current
 # setup keeps working unchanged while you run this, so there's no window
@@ -49,7 +52,7 @@ rotate_one GH_TOKEN \
   "https://github.com/settings/tokens" \
   "Generate new token (classic); scopes: repo, workflow."
 
-rotate_one GH_PUBLIC_TOKEN \
+rotate_one 'GH_PUBLIC_TOKEN!' \
   "https://github.com/settings/personal-access-tokens/new" \
   "Repository access: Public Repositories (read-only); no permissions needed."
 
@@ -61,7 +64,7 @@ separate, deliberate step once you've confirmed these work.
 Try it: on any VM, "git push"/"git fetch" and "gh_session gh auth
 status" exercise GH_TOKEN (one approval dialog each). "anon_access gh
 issue view https://github.com/cli/cli/issues/13307" exercises
-GH_PUBLIC_TOKEN, released with no dialog at all (see config.sh's
-NO_APPROVAL_SECRETS), since anon_access substitutes it for
-GH_TOKEN/GITHUB_TOKEN before a sandboxed agent ever runs.
+GH_PUBLIC_TOKEN, released with no dialog at all (the trailing "!" on
+how it's stored is what does that), since anon_access substitutes it
+for GH_TOKEN/GITHUB_TOKEN before a sandboxed agent ever runs.
 EOF

@@ -18,7 +18,6 @@ def load_secrets_server():
       SECRETS_SERVER_PORT="9876",
       KEYCHAIN_PREFIX="laptop-config-",
       UTMCTL="/usr/bin/true",
-      NO_APPROVAL_SECRETS="GH_PUBLIC_TOKEN",
   )
 
 
@@ -50,10 +49,11 @@ class ApplescriptEscapeTests(unittest.TestCase):
 
 
 class VmLockFallbackTests(unittest.TestCase):
-  """get_secret_from_keychain()'s entire VM-locking mechanism: try the
-  locked name first, fall back to the unlocked name. This is the same
-  behavior verified by hand (mocked "security" calls) while building it;
-  now it's checked automatically instead of by memory.
+  """get_secret_from_keychain()'s VM-locking mechanism: try the
+  most-specific variant first (locked + no-confirmation), down to the
+  plain unlocked name. This is the same behavior verified by hand
+  (mocked "security" calls) while building it; now it's checked
+  automatically instead of by memory.
   """
 
   def setUp(self):
@@ -69,7 +69,13 @@ class VmLockFallbackTests(unittest.TestCase):
     self.server._keychain_read = fake_read
     result = self.server.get_secret_from_keychain("heroku-api-key", "lftux")
     self.assertEqual(result, "SECRET")
-    self.assertEqual(calls[0], "laptop-config-heroku-api-key@lftux")
+    # Tries the more-specific locked+no-confirmation variant first (not
+    # found here), then the plain locked variant (found) - never
+    # reaches either unlocked tier.
+    self.assertEqual(calls, [
+        "laptop-config-heroku-api-key@lftux!",
+        "laptop-config-heroku-api-key@lftux",
+    ])
 
   def test_falls_back_to_unlocked_when_no_locked_entry(self):
     def fake_read(name):
@@ -84,11 +90,17 @@ class VmLockFallbackTests(unittest.TestCase):
 
     def fake_read(name):
       calls.append(name)
-      return "SECRET"
+      return "SECRET" if name == "laptop-config-heroku-api-key" else ""
 
     self.server._keychain_read = fake_read
-    self.server.get_secret_from_keychain("heroku-api-key", "")
-    self.assertEqual(calls, ["laptop-config-heroku-api-key"])
+    result = self.server.get_secret_from_keychain("heroku-api-key", "")
+    self.assertEqual(result, "SECRET")
+    # No vm_hostname: only the two unlocked tiers are tried; no "@"
+    # variant appears at all.
+    self.assertEqual(calls, [
+        "laptop-config-heroku-api-key!",
+        "laptop-config-heroku-api-key",
+    ])
 
   def test_not_found_anywhere_returns_empty(self):
     self.server._keychain_read = lambda name: ""
@@ -96,21 +108,41 @@ class VmLockFallbackTests(unittest.TestCase):
     self.assertEqual(result, "")
 
 
-class NoApprovalSecretsTests(unittest.TestCase):
-  """needs_confirmation() gates whether do_POST shows a dialog at all;
-  default-safe (True) for anything not explicitly opted out via
-  config.sh's NO_APPROVAL_SECRETS.
+class NoConfirmationNamingTests(unittest.TestCase):
+  """needs_confirmation() (and get_secret_from_keychain's matching tier)
+  are both driven by _resolve()'s "<name>!" convention: default-safe
+  (True, a dialog is shown) for anything not stored under a
+  "!"-suffixed name, and composes with VM-locking.
   """
 
   def setUp(self):
     self.server = load_secrets_server()
 
-  def test_listed_secret_skips_confirmation(self):
-    self.assertFalse(self.server.needs_confirmation("GH_PUBLIC_TOKEN"))
+  def test_unlocked_bang_skips_confirmation(self):
+    self.server._keychain_exists = (
+        lambda name: name == "laptop-config-GH_PUBLIC_TOKEN!"
+    )
+    self.assertFalse(self.server.needs_confirmation("GH_PUBLIC_TOKEN", ""))
 
-  def test_unlisted_secret_still_requires_confirmation(self):
-    self.assertTrue(self.server.needs_confirmation("GH_TOKEN"))
-    self.assertTrue(self.server.needs_confirmation("HEROKU_API_KEY"))
+  def test_plain_name_requires_confirmation(self):
+    self.server._keychain_exists = lambda name: name == "laptop-config-GH_TOKEN"
+    self.assertTrue(self.server.needs_confirmation("GH_TOKEN", ""))
+
+  def test_locked_bang_skips_confirmation(self):
+    self.server._keychain_exists = (
+        lambda name: name == "laptop-config-SOME_SECRET@mytux!"
+    )
+    self.assertFalse(self.server.needs_confirmation("SOME_SECRET", "mytux"))
+
+  def test_locked_without_bang_requires_confirmation(self):
+    self.server._keychain_exists = (
+        lambda name: name == "laptop-config-SOME_SECRET@mytux"
+    )
+    self.assertTrue(self.server.needs_confirmation("SOME_SECRET", "mytux"))
+
+  def test_nothing_stored_defaults_to_requiring_confirmation(self):
+    self.server._keychain_exists = lambda name: False
+    self.assertTrue(self.server.needs_confirmation("NEVER_STORED", ""))
 
 
 if __name__ == "__main__":

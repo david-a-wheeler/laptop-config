@@ -91,12 +91,16 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   immediately; `tail -f` it while diagnosing.
 - `host-secrets.sh`: add/rotate/delete the named secrets `secrets_server.py`
   serves. Include `@vm-hostname` in a name to lock that secret to one
-  specific VM instead of leaving it available to any of them. `list` shows
-  every currently servable secret, scanning Keychain directly rather than
-  relying on a declared list. `set` accepts a bare Enter to leave an
-  already-existing secret unchanged, so a script rotating several secrets
-  in one run (see `rotate-github-pat.sh`) can skip the ones that haven't
-  actually expired.
+  specific VM instead of leaving it available to any of them; include a
+  trailing `!` to mark it as releasable without a human approval dialog
+  (the two compose: `name@vm-hostname!` is both). Every secret defaults
+  to requiring approval, so this only ever happens by deliberately
+  choosing that name (e.g. `host-secrets.sh set 'GH_PUBLIC_TOKEN!'`).
+  `list` shows every currently servable secret, `!` and all, scanning
+  Keychain directly rather than relying on a declared list. `set` accepts
+  a bare Enter to leave an already-existing secret unchanged, so a script
+  rotating several secrets in one run (see `rotate-github-pat.sh`) can
+  skip the ones that haven't actually expired.
 - `rotate-github-pat.sh`: rotates both GitHub PATs this repo stores, one
   after another: `GH_TOKEN` (backs git's HTTPS auth and `gh`, since `gh`
   reads a token straight out of the `GH_TOKEN`/`GITHUB_TOKEN` env vars, no
@@ -129,8 +133,9 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   given; a blocklist, not an allowlist, by design (see the script's own
   comment for why). Replaces `GH_TOKEN`/`GITHUB_TOKEN` rather than merely
   unsetting them, with `GH_PUBLIC_TOKEN` fetched from `secrets_server.py`
-  (no confirmation dialog; see config.sh's `NO_APPROVAL_SECRETS`), since
-  `gh` refuses to run at all without some token, even for public data.
+  (stored as `GH_PUBLIC_TOKEN!`; see `host-secrets.sh`'s trailing-`!`
+  no-confirmation naming convention), since `gh` refuses to run at all
+  without some token, even for public data.
   Part of a move toward small, single-purpose, any-shell-callable files
   instead of bash-only functions in `vm-bash-aliases-block.template.sh`;
   not yet installed by `vm-setup.sh` or called from `noclaude()`.

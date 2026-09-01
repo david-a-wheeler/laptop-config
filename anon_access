@@ -18,16 +18,17 @@
 # gh(1) refuses to run at all without a token, even for public data (see
 # the issue above), so rather than just unsetting GH_TOKEN/GITHUB_TOKEN
 # we replace them with GH_PUBLIC_TOKEN: a separate, low-risk "Public
-# Repositories (read-only)" fine-grained PAT (see rotate-github-pat.sh)
-# that secrets_server.py releases with no confirmation dialog (see
-# config.sh's NO_APPROVAL_SECRETS), since leaking it does no more harm
-# than having no token at all. Fetched here, not inside the sandbox:
-# this script still holds a real LAPTOP_CONFIG_AUTH_SESSION at this
-# point (only the command we exec below loses it), same as
-# heroku_session/gh_session. If the fetch fails for any reason (server
-# unreachable, no session, secret not created yet), gh treats an empty
-# GH_TOKEN exactly like an unset one (confirmed), so this just degrades
-# to today's "gh doesn't work" instead of failing this whole script.
+# Repositories (read-only)" fine-grained PAT stored as "GH_PUBLIC_TOKEN!"
+# (see rotate-github-pat.sh and secrets_server.template.py's _resolve()
+# for what the trailing "!" does), which secrets_server.py releases with
+# no confirmation dialog, since leaking it does no more harm than having
+# no token at all. Fetched here, not inside the sandbox: this script
+# still holds a real LAPTOP_CONFIG_AUTH_SESSION at this point (only the
+# command we exec below loses it), same as heroku_session/gh_session.
+# If the fetch fails for any reason (server unreachable, no session,
+# secret not created yet), gh treats an empty GH_TOKEN exactly like an
+# unset one (confirmed), so this just degrades to today's "gh doesn't
+# work" instead of failing this whole script.
 public_token="$(secrets-client.py get GH_PUBLIC_TOKEN --context "anon_access: ${*:-interactive shell}" 2>/dev/null)" || public_token=""
 
 exec env -u GH_ENTERPRISE_TOKEN -u GITHUB_ENTERPRISE_TOKEN \
