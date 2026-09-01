@@ -154,17 +154,19 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   no-confirmation naming convention), since `gh` refuses to run at all
   without some token, even for public data.
   Part of a move toward small, single-purpose, any-shell-callable files
-  instead of bash-only functions in `vm-bash-aliases-block.sh`; not yet
-  called from `noclaude`.
-- `noclaude`: runs Claude Code sandboxed by `nono` (`--allow .` and
-  `~/.claude` only, plus any `config.sh`'s `NONO_EXTRA_READ_PATHS` -
-  written to `/usr/local/etc/noclaude-extra-reads` by `vm-setup.sh`
-  rather than templated into the script itself, so this file needs no
-  rendering either), with every auth-related env var it might have
-  inherited cleared first (`LAPTOP_CONFIG_AUTH_SESSION`, `SSH_AUTH_SOCK`,
-  `HEROKU_API_KEY`, `GH_TOKEN`, `GITHUB_TOKEN`) so the sandboxed agent
-  can never request a host secret or reuse a cached one. Plain
-  executable file, not a bash function: any shell can run it.
+  instead of bash-only functions in `vm-bash-aliases-block.sh`; `noclaude`
+  below is the first caller.
+- `noclaude`: `exec anon-access nono run --allow . --allow ~/.claude
+  <extra --read flags> -- claude "$@"` - four lines total. Running
+  through `anon-access` gets the sandboxed agent every one of its
+  protections (see above) for free, rather than `noclaude` maintaining
+  its own separate, easy-to-forget-to-update env var list; it also means
+  `gh` works for public reads inside the sandbox, same as any other
+  `anon-access` caller. The one thing `noclaude` needs from `config.sh`
+  (`NONO_EXTRA_READ_PATHS`) is written to a small side file
+  (`/usr/local/etc/noclaude-extra-reads`) by `vm-setup.sh` rather than
+  templated into the script, so this file needs no rendering either.
+  Plain executable file, not a bash function: any shell can run it.
 - `nftables.template.conf`: VM egress firewall ruleset.
 - `vm-bash-aliases-block.sh`: the managed block installed into each VM's
   `~/.bash_aliases`: editor and `LAPTOP_CONFIG_AUTH_SESSION`. Not a

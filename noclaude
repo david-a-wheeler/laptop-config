@@ -1,6 +1,4 @@
 #!/bin/sh
-# shellcheck disable=SC1007  # deliberate "VAR= VAR=" scoping, not a typo.
 # shellcheck disable=SC2046  # word-splitting the --read flags (from
 # config.sh's NONO_EXTRA_READ_PATHS) into separate argv tokens is deliberate.
-LAPTOP_CONFIG_AUTH_SESSION= SSH_AUTH_SOCK= HEROKU_API_KEY= GH_TOKEN= GITHUB_TOKEN= \
-  exec nono run --allow . --allow ~/.claude $(cat /usr/local/etc/noclaude-extra-reads 2>/dev/null) -- claude "$@"
+exec anon-access nono run --allow . --allow ~/.claude $(cat /usr/local/etc/noclaude-extra-reads 2>/dev/null) -- claude "$@"

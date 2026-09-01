@@ -224,19 +224,22 @@ rm -f /tmp/secrets-client.rendered
 # never present.
 sudo rm -f /usr/local/bin/secrets-client.py
 
-echo "== Installing heroku-session and gh-session (secrets-client wrappers) =="
+echo "== Installing heroku-session, gh-session, and anon-access (secrets-client wrappers) =="
 # Plain files, no templating needed: install directly rather than via
 # render_template. Any shell can run these (they're just executables on
 # $PATH), unlike the old bash-function versions removed from
 # vm-bash-aliases-block.sh below.
-sudo cp "$SCRIPT_DIR/heroku-session" "$SCRIPT_DIR/gh-session" /usr/local/bin/
-sudo chmod +x /usr/local/bin/heroku-session /usr/local/bin/gh-session
+sudo cp "$SCRIPT_DIR/heroku-session" "$SCRIPT_DIR/gh-session" "$SCRIPT_DIR/anon-access" /usr/local/bin/
+sudo chmod +x /usr/local/bin/heroku-session /usr/local/bin/gh-session /usr/local/bin/anon-access
 
 echo "== Installing noclaude (sandboxed Claude Code wrapper) =="
 # Plain file too; the one thing it needs from config.sh
 # (NONO_EXTRA_READ_PATHS) is written to a small side file instead of
 # templated into the script itself, so noclaude doesn't need rendering
-# either. Built fresh every run, same as everything else here.
+# either. Built fresh every run, same as everything else here. Runs
+# through anon-access above (install order doesn't matter, same
+# reasoning as vm-git-helper/secrets-client: nothing invokes noclaude
+# until well after this script has finished).
 sudo cp "$SCRIPT_DIR/noclaude" /usr/local/bin/noclaude
 sudo chmod +x /usr/local/bin/noclaude
 nono_extra_read_args=""
