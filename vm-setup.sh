@@ -228,9 +228,22 @@ echo "== Installing heroku-session and gh-session (secrets-client wrappers) =="
 # Plain files, no templating needed: install directly rather than via
 # render_template. Any shell can run these (they're just executables on
 # $PATH), unlike the old bash-function versions removed from
-# vm-bash-aliases-block.template.sh below.
+# vm-bash-aliases-block.sh below.
 sudo cp "$SCRIPT_DIR/heroku-session" "$SCRIPT_DIR/gh-session" /usr/local/bin/
 sudo chmod +x /usr/local/bin/heroku-session /usr/local/bin/gh-session
+
+echo "== Installing noclaude (sandboxed Claude Code wrapper) =="
+# Plain file too; the one thing it needs from config.sh
+# (NONO_EXTRA_READ_PATHS) is written to a small side file instead of
+# templated into the script itself, so noclaude doesn't need rendering
+# either. Built fresh every run, same as everything else here.
+sudo cp "$SCRIPT_DIR/noclaude" /usr/local/bin/noclaude
+sudo chmod +x /usr/local/bin/noclaude
+nono_extra_read_args=""
+for path in $NONO_EXTRA_READ_PATHS; do
+  nono_extra_read_args="${nono_extra_read_args}--read ${path} "
+done
+echo "$nono_extra_read_args" | sudo tee /usr/local/etc/noclaude-extra-reads >/dev/null
 
 echo "== Configuring git niceties =="
 configure_git_niceties
@@ -241,15 +254,9 @@ if [ "$want_claude" = true ]; then
   install_unless_locally_newer "$SCRIPT_DIR/claude-CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 fi
 
-echo "== Managing ~/.bash_aliases block (editor, LAPTOP_CONFIG_AUTH_SESSION, noclaude) =="
-nono_extra_read_args=""
-for path in $NONO_EXTRA_READ_PATHS; do
-  nono_extra_read_args="${nono_extra_read_args}--read ${path} "
-done
-NONO_EXTRA_READ_ARGS="$nono_extra_read_args"
-render_template "$SCRIPT_DIR/vm-bash-aliases-block.template.sh" /tmp/bash-aliases-block.rendered \
-  NONO_EXTRA_READ_ARGS
-install_managed_block /tmp/bash-aliases-block.rendered "$HOME/.bash_aliases"
+echo "== Managing ~/.bash_aliases block (editor, LAPTOP_CONFIG_AUTH_SESSION) =="
+# Plain file, not rendered: no @@VAR@@ substitution left in it.
+install_managed_block "$SCRIPT_DIR/vm-bash-aliases-block.sh" "$HOME/.bash_aliases"
 rm -f /tmp/bash-aliases-block.rendered
 
 if [ "$ENABLE_INFERENCE_SSH_TUNNEL" = "true" ]; then

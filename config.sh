@@ -94,7 +94,7 @@ UTMCTL="/Applications/UTM.app/Contents/MacOS/utmctl"
 # one legitimate destination and shouldn't be reachable anywhere else.
 NFTABLES_ALLOWED_TCP_PORTS="22 80 443"
 
-# Extra paths noclaude() grants read-only nono access to, beyond the
+# Extra paths noclaude grants read-only nono access to, beyond the
 # current directory and ~/.claude (which every project needs). Space
 # separated. Add your own toolchain dirs here as needed. Use $HOME rather
 # than ~, since a tilde in a double-quoted assignment doesn't expand.

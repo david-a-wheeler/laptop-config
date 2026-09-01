@@ -154,15 +154,25 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   no-confirmation naming convention), since `gh` refuses to run at all
   without some token, even for public data.
   Part of a move toward small, single-purpose, any-shell-callable files
-  instead of bash-only functions in `vm-bash-aliases-block.template.sh`;
-  not yet installed by `vm-setup.sh` or called from `noclaude()`.
+  instead of bash-only functions in `vm-bash-aliases-block.sh`; not yet
+  called from `noclaude`.
+- `noclaude`: runs Claude Code sandboxed by `nono` (`--allow .` and
+  `~/.claude` only, plus any `config.sh`'s `NONO_EXTRA_READ_PATHS` -
+  written to `/usr/local/etc/noclaude-extra-reads` by `vm-setup.sh`
+  rather than templated into the script itself, so this file needs no
+  rendering either), with every auth-related env var it might have
+  inherited cleared first (`LAPTOP_CONFIG_AUTH_SESSION`, `SSH_AUTH_SOCK`,
+  `HEROKU_API_KEY`, `GH_TOKEN`, `GITHUB_TOKEN`) so the sandboxed agent
+  can never request a host secret or reuse a cached one. Plain
+  executable file, not a bash function: any shell can run it.
 - `nftables.template.conf`: VM egress firewall ruleset.
-- `vm-bash-aliases-block.template.sh`: the managed block installed into each
-  VM's `~/.bash_aliases`: editor, `LAPTOP_CONFIG_AUTH_SESSION`, and the
-  `noclaude()` sandboxed-agent wrapper. Bash-only for now: a shell like
-  zsh doesn't source `~/.bash_aliases` by default; supporting another
-  shell would mean a separate file in that shell's own syntax, not just
-  installing this one elsewhere.
+- `vm-bash-aliases-block.sh`: the managed block installed into each VM's
+  `~/.bash_aliases`: editor and `LAPTOP_CONFIG_AUTH_SESSION`. Not a
+  template (nothing left to substitute since `noclaude` moved out to its
+  own file above). Bash-only for now: a shell like zsh doesn't source
+  `~/.bash_aliases` by default; supporting another shell would mean a
+  separate file in that shell's own syntax, not just installing this one
+  elsewhere.
 - `claude-CLAUDE.md`: global Claude Code instructions, installed to each
   VM's `~/.claude/CLAUDE.md` (Claude Code runs in the VMs, not on the host,
   so this isn't installed by host-setup.sh). If you've edited the installed

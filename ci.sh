@@ -20,7 +20,7 @@ step() {
 }
 
 # Plain scripts: no @@VAR@@ templating, safe to check as-is.
-PLAIN_SCRIPTS="config.sh common.sh host-setup.sh vm-setup.sh host-secrets.sh rotate-github-pat.sh rotate-heroku-key.sh anon-access heroku-session gh-session vm-git-helper"
+PLAIN_SCRIPTS="config.sh common.sh host-setup.sh vm-setup.sh host-secrets.sh rotate-github-pat.sh rotate-heroku-key.sh anon-access heroku-session gh-session vm-git-helper noclaude"
 
 step "shellcheck (plain scripts)"
 # shellcheck disable=SC2086
@@ -40,17 +40,18 @@ step "rendering and checking templates"
 . "$SCRIPT_DIR/config.sh"
 . "$SCRIPT_DIR/common.sh"
 
-NONO_EXTRA_READ_ARGS="--read $HOME/.rbenv "
-render_template vm-bash-aliases-block.template.sh "$tmp/bash-aliases.sh" NONO_EXTRA_READ_ARGS
-if ! dash -n "$tmp/bash-aliases.sh"; then
-  echo "FAILED: vm-bash-aliases-block.template.sh (dash -n)" >&2
+# No shebang (sourced into ~/.bash_aliases, never run directly), so
+# shellcheck needs an explicit "-s bash" rather than joining PLAIN_SCRIPTS
+# above, which relies on each file's own shebang for shell detection.
+if ! dash -n vm-bash-aliases-block.sh; then
+  echo "FAILED: vm-bash-aliases-block.sh (dash -n)" >&2
   fail=1
 fi
-if ! bash -n "$tmp/bash-aliases.sh"; then
-  echo "FAILED: vm-bash-aliases-block.template.sh (bash -n)" >&2
+if ! bash -n vm-bash-aliases-block.sh; then
+  echo "FAILED: vm-bash-aliases-block.sh (bash -n)" >&2
   fail=1
 fi
-if ! shellcheck -x -s bash "$tmp/bash-aliases.sh"; then
+if ! shellcheck -x -s bash vm-bash-aliases-block.sh; then
   fail=1
 fi
 

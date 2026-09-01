@@ -33,11 +33,11 @@ any VM-lock/no-confirmation suffix itself - never send one of those
 suffixes here directly, see secrets-server.template.py's _resolve().
 
 Requires LAPTOP_CONFIG_AUTH_SESSION to be set (see
-vm-bash-aliases-block.template.sh, which generates one for every human
+vm-bash-aliases-block.sh, which generates one for every human
 interactive shell). Without it, the server denies the request without
-ever consulting Keychain, same as any other caller. noclaude() strips
-it before an AI agent ever runs, so a sandboxed agent can never use
-this to reach a real secret either.
+ever consulting Keychain, same as any other caller. noclaude strips it
+before an AI agent ever runs, so a sandboxed agent can never use this
+to reach a real secret either.
 
 Rendered from secrets-client.template.py by vm-setup.sh: edit the
 template, not the installed copy (secrets-client, no ".py"), since a

@@ -453,7 +453,7 @@ class SecretsRequestHandler(BaseHTTPRequestHandler):
   def _show_approval_dialog(self, prompt_text: str,
                              title: str = "Secrets Server Gatekeeper") -> bool:
     """Defaults to Authorize (bare Enter approves): only ever fires for a
-    request with a live LAPTOP_CONFIG_AUTH_SESSION, which noclaude()
+    request with a live LAPTOP_CONFIG_AUTH_SESSION, which noclaude
     strips before an AI agent gets near it, so this gates routine human
     operations, not an adversarial AI.
     """
