@@ -184,6 +184,7 @@ echo "== Installing nono agent profiles (config.sh's NONO_AGENT_PROFILES) =="
 # installed (obviously current, so no outdated check needed); an already
 # installed one is left alone, with a notice printed if a newer version
 # exists, so upgrading stays a deliberate, on-request choice per VM.
+outdated_notices=""
 for pack in $NONO_AGENT_PROFILES; do
   # Cleanup for nono's "always-further" -> "nolabs-ai" namespace move.
   nono remove "always-further/${pack#*/}" >/dev/null 2>&1 || true
@@ -196,19 +197,21 @@ for pack in $NONO_AGENT_PROFILES; do
       installed="${versions%% *}"
       latest="${versions##* }"
       if [ "$installed" != "$latest" ]; then
-        cat <<EOF
-
-NOTE: a newer $pack profile is available: $installed -> $latest.
-  nono profile diff $pack@$installed $pack@$latest
-  nono pull $pack --force
-
-EOF
+        # Not "nono profile diff": confirmed it can silently miss a real
+        # change (a new filesystem grant), so it's not safe to suggest as
+        # a review step. Just the update command itself, one per line, so
+        # a run with several outdated packs can be copy-pasted as a block.
+        outdated_notices="${outdated_notices}  nono pull $pack --force  # Update $installed->$latest
+"
       fi
     fi
   else
     nono pull "$pack"
   fi
 done
+if [ -n "$outdated_notices" ]; then
+  printf '\nNOTE: newer nono agent profiles are available; update any of these when ready:\n%s\n' "$outdated_notices"
+fi
 
 echo "== Installing vm-git-helper (git credential helper) =="
 # Plain file, no templating needed: it takes the secret name as an
