@@ -163,17 +163,22 @@ re-run `vm-setup.sh`, rather than disabling nftables to work around it.
   Part of a move toward small, single-purpose, any-shell-callable files
   instead of bash-only functions in `vm-bash-aliases-block.sh`; `noclaude`
   below is the first caller.
-- `noclaude`: `exec anon-access nono run --allow . --allow ~/.claude
-  <extra nono options> -- claude "$@"` - four lines total. Running
+- `noclaude`: `exec anon-access nono run --profile nolabs-ai/claude
+  <extra nono options> -- claude "$@"` (a handful of lines total). Running
   through `anon-access` gets the sandboxed agent every one of its
   protections (see above) for free, rather than `noclaude` maintaining
   its own separate, easy-to-forget-to-update env var list; it also means
   `gh` works for public reads inside the sandbox, same as any other
-  `anon-access` caller. The one thing `noclaude` needs from `config.sh`
-  (`NONO_EXTRA_READ_PATHS`) is written to a small side file
-  (`/usr/local/etc/noclaude-extra-options`) by `vm-setup.sh` rather than
-  templated into the script, so this file needs no rendering either.
-  Plain executable file, not a bash function: any shell can run it.
+  `anon-access` caller. `--profile nolabs-ai/claude` is nono's own
+  maintained profile for Claude Code (installed by `vm-setup.sh`),
+  rather than a hand-rolled `--allow` list this repo would have to keep
+  in sync with what Claude Code actually needs at runtime. The one
+  extra thing `noclaude` takes from `config.sh` (`NONO_EXTRA_READ_PATHS`,
+  for paths beyond what that profile already grants) is written to a
+  small side file (`/usr/local/etc/noclaude-extra-options`) by
+  `vm-setup.sh` rather than templated into the script, so this file
+  needs no rendering either. Plain executable file, not a bash
+  function: any shell can run it.
 - `nftables.template.conf`: VM egress firewall ruleset.
 - `vm-bash-aliases-block.sh`: the managed block installed into each VM's
   `~/.bash_aliases`: editor and `BULKHEAD_AUTH_SESSION`. Not a

@@ -177,6 +177,39 @@ else
   echo "  https://github.com/nolabs-ai/nono/releases" >&2
 fi
 
+echo "== Installing nono agent profiles (config.sh's NONO_AGENT_PROFILES) =="
+# One pack per supported harness (noclaude's --profile nolabs-ai/claude
+# is one of these); add another "namespace/name" to NONO_AGENT_PROFILES
+# to support a new one, nothing else here changes. A missing pack is
+# installed (obviously current, so no outdated check needed); an already
+# installed one is left alone, with a notice printed if a newer version
+# exists, so upgrading stays a deliberate, on-request choice per VM.
+for pack in $NONO_AGENT_PROFILES; do
+  # Cleanup for nono's "always-further" -> "nolabs-ai" namespace move.
+  nono remove "always-further/${pack#*/}" >/dev/null 2>&1 || true
+  if nono list --installed --json 2>/dev/null \
+      | jq -e --arg p "$pack" '.packages[$p]' >/dev/null 2>&1; then
+    outdated_json="$(nono outdated --json 2>/dev/null)" || outdated_json='[]'
+    versions="$(printf '%s' "$outdated_json" \
+      | jq -r --arg p "$pack" '.[] | select(.key == $p) | "\(.installed) \(.latest)"')"
+    if [ -n "$versions" ]; then
+      installed="${versions%% *}"
+      latest="${versions##* }"
+      if [ "$installed" != "$latest" ]; then
+        cat <<EOF
+
+NOTE: a newer $pack profile is available: $installed -> $latest.
+  nono profile diff $pack@$installed $pack@$latest
+  nono pull $pack --force
+
+EOF
+      fi
+    fi
+  else
+    nono pull "$pack"
+  fi
+done
+
 echo "== Installing vm-git-helper (git credential helper) =="
 # Plain file, no templating needed: it takes the secret name as an
 # argument rather than having one baked in (see below), so it's

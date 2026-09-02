@@ -2,4 +2,12 @@
 # shellcheck disable=SC2046  # word-splitting noclaude-extra-options'
 # content (currently just --read flags, from config.sh's
 # NONO_EXTRA_READ_PATHS) into separate argv tokens is deliberate.
-exec anon-access nono run --allow . --allow ~/.claude $(cat /usr/local/etc/noclaude-extra-options 2>/dev/null) -- claude "$@"
+#
+# --profile nolabs-ai/claude (installed by vm-setup.sh) is nono's own
+# maintained profile for Claude Code, not a hand-rolled --allow list: it
+# grants read-write access to $PWD, ~/.claude, and the other paths Claude
+# Code actually needs at runtime (~/.claude.json and its lock files,
+# ~/.cache/claude, ~/.local/state/claude/locks), while explicitly denying
+# the credential/keychain/browser-data/shell-history groups a compromised
+# agent would otherwise reach for.
+exec anon-access nono run --profile nolabs-ai/claude $(cat /usr/local/etc/noclaude-extra-options 2>/dev/null) -- claude "$@"
